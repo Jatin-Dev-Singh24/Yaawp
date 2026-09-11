@@ -1,0 +1,68 @@
+import React, { useEffect, useState } from 'react';
+import { motion, useSpring } from 'motion/react';
+
+export const AmbientCursor: React.FC = () => {
+  const [hasMoved, setHasMoved] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const cursorX = useSpring(-500, { stiffness: 100, damping: 22 });
+  const cursorY = useSpring(-500, { stiffness: 100, damping: 22 });
+
+  useEffect(() => {
+    // Check user preference for reduced motion
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(mediaQuery.matches);
+    const listener = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mediaQuery.addEventListener('change', listener);
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (mediaQuery.matches) return;
+      cursorX.set(e.clientX);
+      cursorY.set(e.clientY);
+      if (!hasMoved) setHasMoved(true);
+
+      // Update CSS variables for any elements using radial gradients
+      const xPercent = ((e.clientX / window.innerWidth) * 100).toFixed(1) + '%';
+      const yPercent = ((e.clientY / window.innerHeight) * 100).toFixed(1) + '%';
+      document.documentElement.style.setProperty('--mouse-x', xPercent);
+      document.documentElement.style.setProperty('--mouse-y', yPercent);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      mediaQuery.removeEventListener('change', listener);
+    };
+  }, [cursorX, cursorY, hasMoved]);
+
+  if (reducedMotion || !hasMoved) return null;
+
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-0 z-0 overflow-hidden select-none transition-opacity duration-700"
+    >
+      {/* Primary soft atmospheric lime glow */}
+      <motion.div
+        style={{
+          x: cursorX,
+          y: cursorY,
+          translateX: '-50%',
+          translateY: '-50%'
+        }}
+        className="absolute w-[500px] h-[500px] rounded-full bg-gradient-to-tr from-lime-500/15 via-emerald-500/10 to-teal-500/5 blur-3xl"
+      />
+
+      {/* Secondary trailing subtle electric lime ambient orb */}
+      <motion.div
+        style={{
+          x: cursorX,
+          y: cursorY,
+          translateX: '-40%',
+          translateY: '-40%'
+        }}
+        transition={{ delay: 0.05 }}
+        className="absolute w-[240px] h-[240px] rounded-full bg-lime-400/10 blur-2xl"
+      />
+    </div>
+  );
+};

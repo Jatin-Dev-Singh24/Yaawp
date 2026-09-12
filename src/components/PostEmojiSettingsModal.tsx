@@ -66,7 +66,7 @@ export const PostEmojiSettingsModal: React.FC<PostEmojiSettingsModalProps> = ({
   const currentCategoryEmojis = EMOJI_CATEGORIES.find(c => c.name === activeCategory)?.emojis || [];
 
   const filteredEmojis = searchQuery.trim()
-    ? ALL_PRESET_EMOJIS
+    ? ALL_PRESET_EMOJIS.filter(e => e.includes(searchQuery.trim()))
     : currentCategoryEmojis;
 
   return (
@@ -175,25 +175,43 @@ export const PostEmojiSettingsModal: React.FC<PostEmojiSettingsModalProps> = ({
 
             {/* Categories & Search */}
             <div className="space-y-2">
-              <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
-                {EMOJI_CATEGORIES.map(cat => (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none flex-1">
+                  {EMOJI_CATEGORIES.map(cat => (
+                    <button
+                      key={cat.name}
+                      type="button"
+                      onClick={() => {
+                        setActiveCategory(cat.name);
+                        setSearchQuery('');
+                      }}
+                      className={`px-2 py-1 rounded-lg text-xs font-medium shrink-0 transition-colors flex items-center gap-1 ${
+                        activeCategory === cat.name && !searchQuery
+                          ? 'bg-indigo-600 text-white font-bold'
+                          : 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200'
+                      }`}
+                    >
+                      <span>{cat.icon}</span>
+                      <span className="text-[10px]">{cat.name.split('&')[0]}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
                   <button
-                    key={cat.name}
                     type="button"
-                    onClick={() => {
-                      setActiveCategory(cat.name);
-                      setSearchQuery('');
-                    }}
-                    className={`px-2 py-1 rounded-lg text-xs font-medium shrink-0 transition-colors flex items-center gap-1 ${
-                      activeCategory === cat.name && !searchQuery
-                        ? 'bg-indigo-600 text-white font-bold'
-                        : 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200'
-                    }`}
+                    onClick={() => handleSelectAllCategory(currentCategoryEmojis)}
+                    className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-1"
                   >
-                    <span>{cat.icon}</span>
-                    <span className="text-[10px]">{cat.name.split('&')[0]}</span>
+                    + Add Category
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={() => setAllowedEmojis([])}
+                    className="text-[10px] font-semibold text-rose-500 hover:underline px-1"
+                  >
+                    Clear All
+                  </button>
+                </div>
               </div>
 
               {/* Emoji Grid */}

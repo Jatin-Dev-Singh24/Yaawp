@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Heart,
   MessageCircle,
-  Send,
+  Share2,
   Bookmark,
   Music,
   Volume2,
@@ -15,6 +15,8 @@ import {
 import { motion } from 'motion/react';
 import { ReelSkeleton } from './SkeletonScreens';
 import { useApp } from '../context/AppContext';
+import { SharePostModal } from './SharePostModal';
+import { Post } from '../types';
 
 export const ReelsView: React.FC = () => {
   const {
@@ -31,6 +33,7 @@ export const ReelsView: React.FC = () => {
   const [isMediaLoaded, setIsMediaLoaded] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Initial load skeleton simulation for seamless perceived loading
   useEffect(() => {
@@ -210,9 +213,13 @@ export const ReelsView: React.FC = () => {
           </button>
 
           {/* Share */}
-          <button onClick={copyReelLink} className="flex flex-col items-center gap-1 group">
+          <button
+            onClick={() => setShowShareModal(true)}
+            className="flex flex-col items-center gap-1 group"
+            title="Share reel"
+          >
             <div className="w-11 h-11 rounded-full bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Send className="w-5 h-5 stroke-[1.8px]" />
+              <Share2 className="w-5 h-5 stroke-[1.8px]" />
             </div>
             <span className="text-[11px] font-semibold">
               {currentReel.sharesCount.toLocaleString()}
@@ -265,6 +272,27 @@ export const ReelsView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Share Modal for Reel */}
+      {showShareModal && (
+        <SharePostModal
+          isOpen={showShareModal}
+          post={{
+            id: currentReel.id,
+            user: currentReel.user,
+            mediaUrls: [currentReel.mediaUrl],
+            caption: currentReel.caption,
+            timestamp: 'Reel',
+            createdAt: Date.now(),
+            likesCount: currentReel.likesCount,
+            isLiked: currentReel.isLiked,
+            isSaved: currentReel.isSaved,
+            filterClass: currentReel.filterClass,
+            comments: []
+          }}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
     </div>
   );
 };

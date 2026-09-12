@@ -160,7 +160,7 @@ export const CreatePostModal: React.FC = () => {
     setShareTarget('post');
     setShowAdditionalSettings(false);
     setCustomEmojiControl(false);
-    setAllowedEmojis([...AVAILABLE_REACTION_EMOJIS]);
+    setAllowedEmojis([...DEFAULT_QUICK_REACTIONS]);
     setIsCreateModalOpen(false);
   };
 

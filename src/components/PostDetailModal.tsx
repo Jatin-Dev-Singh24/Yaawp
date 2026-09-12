@@ -3,6 +3,8 @@ import {
   X,
   Heart,
   MessageCircle,
+  Share2,
+  Repeat,
   Send,
   Bookmark,
   MoreHorizontal,
@@ -15,11 +17,17 @@ import {
   EyeOff,
   Trash2,
   Copy,
-  Check
+  Check,
+  Plus,
+  Sliders
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ThreadedCommentTree } from './ThreadedCommentTree';
 import { ConfirmationModal } from './ConfirmationModal';
+import { SharePostModal } from './SharePostModal';
+import { EmojiPickerModal } from './EmojiPickerModal';
+import { PostEmojiSettingsModal } from './PostEmojiSettingsModal';
+import { DEFAULT_QUICK_REACTIONS } from '../data/emojis';
 
 export const PostDetailModal: React.FC = () => {
   const {
@@ -33,18 +41,30 @@ export const PostDetailModal: React.FC = () => {
     openUserProfile,
     showToast,
     currentUser,
+    posts,
+    allUsers,
+    quotePost,
     editPost,
     deletePost,
     archivePost,
-    toggleHidePostFromGrid
+    toggleHidePostFromGrid,
+    reactToPost,
+    updatePostEmojiSettings
   } = useApp();
 
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [commentText, setCommentText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showQuoteDialog, setShowQuoteDialog] = useState(false);
+  const [quoteCaption, setQuoteCaption] = useState('');
   const [isEditingCaption, setIsEditingCaption] = useState(false);
   const [editedCaption, setEditedCaption] = useState('');
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [showFullEmojiPicker, setShowFullEmojiPicker] = useState(false);
+  const [showEmojiSettingsModal, setShowEmojiSettingsModal] = useState(false);
+  const [showCommentFullEmojiPicker, setShowCommentFullEmojiPicker] = useState(false);
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean;
     title: string;
@@ -63,6 +83,34 @@ export const PostDetailModal: React.FC = () => {
 
   if (!selectedPostForModal) return null;
   const post = selectedPostForModal;
+
+  // Original post attribution extraction if quoted or reposted
+  const originalAuthor = post.quotePost
+    ? (post.quotePost.authorUsername || post.quotePost.user?.username || '')
+    : '';
+  const originalName = post.quotePost
+    ? (post.quotePost.authorName || post.quotePost.user?.name || '')
+    : '';
+  const originalAvatar = post.quotePost
+    ? (post.quotePost.authorAvatar || post.quotePost.user?.avatar || '')
+    : '';
+  const originalVerified = post.quotePost
+    ? Boolean(post.quotePost.isVerified || post.quotePost.user?.isVerified)
+    : false;
+  const originalCaption = post.quotePost
+    ? (post.quotePost.caption || '')
+    : '';
+  const originalMedia = post.quotePost
+    ? (post.quotePost.mediaUrl || (post.quotePost.mediaUrls && post.quotePost.mediaUrls[0]) || '')
+    : '';
+  const originalPostId = post.quotePost?.id || post.originalPostId;
+
+  const handleQuoteSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    quotePost(post.id, quoteCaption.trim());
+    setQuoteCaption('');
+    setShowQuoteDialog(false);
+  };
 
   const handleNextMedia = () => {
     if (currentMediaIndex < post.mediaUrls.length - 1) {
@@ -197,14 +245,14 @@ export const PostDetailModal: React.FC = () => {
             <div className="relative">
               <button
                 onClick={() => setShowOptionsMenu(!showOptionsMenu)}
-                className="text-slate-500 hover:text-slate-900 dark:hover:text-white p-1 rounded-full hover:bg-zinc-800 transition-colors"
+                className="text-slate-500 hover:text-slate-900 dark:hover:text-white p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 title="Post options"
               >
                 <MoreHorizontal className="w-5 h-5" />
               </button>
 
               {showOptionsMenu && (
-                <div className="absolute right-0 top-8 z-30 w-44 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xl p-1.5 space-y-1 text-xs text-zinc-200 animate-in fade-in">
+                <div className="absolute right-0 top-8 z-30 w-48 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-1.5 space-y-1 text-xs text-slate-800 dark:text-slate-200 animate-in fade-in">
                   {post.user.id === currentUser.id ? (
                     <>
                       <button
@@ -213,10 +261,21 @@ export const PostDetailModal: React.FC = () => {
                           setEditedCaption(post.caption);
                           setShowOptionsMenu(false);
                         }}
-                        className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-zinc-800 flex items-center gap-2"
+                        className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
                       >
-                        <Edit2 className="w-3.5 h-3.5 text-lime-400" />
+                        <Edit2 className="w-3.5 h-3.5 text-indigo-500" />
                         Edit Caption
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowOptionsMenu(false);
+                          setShowEmojiSettingsModal(true);
+                        }}
+                        className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
+                      >
+                        <Sliders className="w-3.5 h-3.5 text-indigo-500" />
+                        Emoji Reaction Settings
                       </button>
 
                       <button
@@ -234,9 +293,9 @@ export const PostDetailModal: React.FC = () => {
                             }
                           });
                         }}
-                        className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-zinc-800 flex items-center gap-2"
+                        className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
                       >
-                        <Archive className="w-3.5 h-3.5 text-amber-400" />
+                        <Archive className="w-3.5 h-3.5 text-amber-500" />
                         Archive Post
                       </button>
 
@@ -245,9 +304,9 @@ export const PostDetailModal: React.FC = () => {
                           toggleHidePostFromGrid(post.id);
                           setShowOptionsMenu(false);
                         }}
-                        className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-zinc-800 flex items-center gap-2"
+                        className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
                       >
-                        <EyeOff className="w-3.5 h-3.5 text-purple-400" />
+                        <EyeOff className="w-3.5 h-3.5 text-purple-500" />
                         Hide from Profile
                       </button>
 
@@ -266,7 +325,7 @@ export const PostDetailModal: React.FC = () => {
                             }
                           });
                         }}
-                        className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-rose-950/50 flex items-center gap-2 text-rose-400 font-semibold"
+                        className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/50 flex items-center gap-2 text-rose-600 dark:text-rose-400 font-semibold"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         Delete Post
@@ -279,9 +338,9 @@ export const PostDetailModal: React.FC = () => {
                       copyLink();
                       setShowOptionsMenu(false);
                     }}
-                    className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-zinc-800 flex items-center gap-2"
+                    className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
                   >
-                    <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                    <Copy className="w-3.5 h-3.5 text-slate-400" />
                     Copy Link
                   </button>
                 </div>
@@ -293,17 +352,17 @@ export const PostDetailModal: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-4 space-y-4 text-sm">
             {/* Caption as first comment or inline editor */}
             {isEditingCaption ? (
-              <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-2xl space-y-2">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-2">
                 <textarea
                   value={editedCaption}
                   onChange={e => setEditedCaption(e.target.value)}
                   rows={3}
-                  className="w-full p-2 text-xs bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-lime-400"
+                  className="w-full p-2.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
                 <div className="flex justify-end gap-2">
                   <button
                     onClick={() => setIsEditingCaption(false)}
-                    className="px-3 py-1 rounded-lg text-xs text-zinc-400 hover:bg-zinc-800"
+                    className="px-3 py-1 rounded-lg text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
                   >
                     Cancel
                   </button>
@@ -314,13 +373,127 @@ export const PostDetailModal: React.FC = () => {
                         setIsEditingCaption(false);
                       }
                     }}
-                    className="px-3 py-1 rounded-lg bg-lime-400 text-zinc-950 text-xs font-bold hover:bg-lime-300"
+                    className="px-3 py-1 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-colors"
                   >
                     Save
                   </button>
                 </div>
               </div>
+            ) : post.quotePost && !post.caption ? (
+              /* Quoted / Reposted WITHOUT user commentary */
+              <div className="space-y-2.5">
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+                  <div
+                    className="flex items-center gap-2.5 cursor-pointer min-w-0 group"
+                    onClick={() => {
+                      const origUser = allUsers.find(u => u.username === originalAuthor);
+                      if (origUser) goToProfile(origUser.id);
+                    }}
+                  >
+                    {originalAvatar && (
+                      <img
+                        src={originalAvatar}
+                        alt={originalAuthor}
+                        className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-indigo-500/40"
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1 text-xs font-bold text-slate-900 dark:text-white group-hover:underline">
+                        <span className="truncate">Original Post by @{originalAuthor}</span>
+                        {originalVerified && <CheckCircle2 className="w-3.5 h-3.5 fill-indigo-500 text-white shrink-0" />}
+                      </div>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {originalName ? `${originalName} · ` : ''}Original creator
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-600 text-white shrink-0">
+                    Original
+                  </span>
+                </div>
+
+                {originalCaption && (
+                  <div className="text-slate-900 dark:text-slate-100 leading-snug">
+                    <span
+                      onClick={() => {
+                        const origUser = allUsers.find(u => u.username === originalAuthor);
+                        if (origUser) goToProfile(origUser.id);
+                      }}
+                      className="font-bold mr-1.5 cursor-pointer hover:underline"
+                    >
+                      {originalAuthor}
+                    </span>
+                    <span>{originalCaption}</span>
+                  </div>
+                )}
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
+                  Reposted by @{post.user.username} · {post.timestamp}
+                </span>
+              </div>
+            ) : post.quotePost && post.caption ? (
+              /* Quoted WITH user commentary */
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <img
+                    src={post.user.avatar}
+                    alt={post.user.username}
+                    onClick={() => goToProfile(post.user.id)}
+                    className="w-8 h-8 rounded-full object-cover flex-shrink-0 cursor-pointer"
+                  />
+                  <div className="flex-1 space-y-1">
+                    <p className="text-slate-900 dark:text-slate-100 leading-snug">
+                      <span
+                        onClick={() => goToProfile(post.user.id)}
+                        className="font-bold mr-1.5 cursor-pointer hover:underline"
+                      >
+                        {post.user.username}
+                      </span>
+                      {post.caption}
+                    </p>
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
+                      {post.timestamp}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Embedded Quoted Original Post Box */}
+                <div
+                  onClick={() => {
+                    if (originalPostId) {
+                      const orig = posts.find(p => p.id === originalPostId);
+                      if (orig) setSelectedPostForModal(orig);
+                    }
+                  }}
+                  className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-850/90 hover:border-indigo-400/60 transition-colors cursor-pointer space-y-2 select-none"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {originalAvatar && (
+                        <img src={originalAvatar} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+                      )}
+                      <div className="flex items-center gap-1 text-xs font-bold text-slate-900 dark:text-white">
+                        <span>@{originalAuthor}</span>
+                        {originalVerified && <CheckCircle2 className="w-3 h-3 fill-indigo-500 text-white shrink-0" />}
+                      </div>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold">
+                      Original Post
+                    </span>
+                  </div>
+                  {originalCaption && (
+                    <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2">
+                      {originalCaption}
+                    </p>
+                  )}
+                  {originalMedia && (
+                    <div className="rounded-xl overflow-hidden aspect-video max-h-40 bg-black/5">
+                      <img src={originalMedia} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </div>
+              </div>
             ) : (
+              /* Standard Post */
               <div className="flex items-start gap-3">
                 <img
                   src={post.user.avatar}
@@ -365,25 +538,98 @@ export const PostDetailModal: React.FC = () => {
           {/* Actions & Likes Count */}
           <div className="p-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button onClick={() => toggleLikePost(post.id)}>
-                  <Heart
-                    className={`w-5 h-5 transition-colors ${
-                      post.isLiked
-                        ? 'fill-rose-500 text-rose-500'
-                        : 'text-slate-800 dark:text-slate-200 hover:text-slate-500'
-                    }`}
-                  />
+              <div className="flex items-center gap-3">
+                {/* Heart / Reaction Button with Floating Picker */}
+                <div
+                  className="relative"
+                  onMouseEnter={() => setShowReactionPicker(true)}
+                  onMouseLeave={() => setShowReactionPicker(false)}
+                >
+                  <button
+                    onClick={() => toggleLikePost(post.id)}
+                    className="p-1 hover:scale-110 transition-transform"
+                    title="Like or react to post"
+                  >
+                    <Heart
+                      className={`w-5 h-5 transition-colors ${
+                        post.isLiked
+                          ? 'fill-rose-500 text-rose-500'
+                          : 'text-slate-800 dark:text-slate-200 hover:text-slate-500'
+                      }`}
+                    />
+                  </button>
+
+                  {/* Floating Quick Reaction Bar */}
+                  {showReactionPicker && (
+                    <div className="absolute bottom-8 left-0 z-40 flex items-center gap-1.5 p-1.5 bg-white dark:bg-slate-850 rounded-full shadow-2xl border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-150">
+                      {((post.allowedEmojis && post.allowedEmojis.length > 0) ? post.allowedEmojis : DEFAULT_QUICK_REACTIONS).slice(0, 8).map(emoji => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => {
+                            reactToPost(post.id, emoji);
+                            setShowReactionPicker(false);
+                          }}
+                          className="text-base hover:scale-130 transition-transform p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700"
+                          title={`React with ${emoji}`}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                      {/* Plus button to open full unrestricted EmojiPickerModal */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowReactionPicker(false);
+                          setShowFullEmojiPicker(true);
+                        }}
+                        className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-750 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950 hover:text-indigo-600 transition-all font-bold"
+                        title="Choose any reaction emoji"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setShowFullEmojiPicker(true)}
+                  className="p-1 hover:scale-110 transition-transform text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400"
+                  title="React with any emoji"
+                >
+                  <Smile className="w-5 h-5 stroke-[1.8px]" />
                 </button>
-                <button onClick={() => {}}>
+
+                <button
+                  onClick={() => {}}
+                  className="p-1 hover:scale-110 transition-transform"
+                  title="Comment"
+                >
                   <MessageCircle className="w-5 h-5 text-slate-800 dark:text-slate-200" />
                 </button>
-                <button onClick={copyLink}>
-                  <Send className="w-5 h-5 text-slate-800 dark:text-slate-200" />
+
+                <button
+                  onClick={() => setShowQuoteDialog(true)}
+                  className="p-1 hover:scale-110 transition-transform text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400"
+                  title="Quote or repost"
+                >
+                  <Repeat className="w-4 h-4 stroke-[2]" />
+                </button>
+
+                <button
+                  onClick={() => setShowShareModal(true)}
+                  className="p-1 hover:scale-110 transition-transform text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400"
+                  title="Share post"
+                >
+                  <Share2 className="w-5 h-5 stroke-[1.8px]" />
                 </button>
               </div>
 
-              <button onClick={() => toggleSavePost(post.id)}>
+              <button
+                onClick={() => toggleSavePost(post.id)}
+                className="p-1 hover:scale-110 transition-transform"
+                title="Save post"
+              >
                 <Bookmark
                   className={`w-5 h-5 ${
                     post.isSaved ? 'fill-slate-900 dark:fill-white text-slate-900 dark:text-white' : 'text-slate-800 dark:text-slate-200'
@@ -391,6 +637,29 @@ export const PostDetailModal: React.FC = () => {
                 />
               </button>
             </div>
+
+            {/* Aggregated Expressive Reaction Chips */}
+            {post.reactions && Object.keys(post.reactions).length > 0 && (
+              <div className="flex flex-wrap items-center gap-1 pt-1">
+                {Object.entries(post.reactions).map(([emoji, uids]) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => reactToPost(post.id, emoji)}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all cursor-pointer ${
+                      post.userReaction === emoji
+                        ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold'
+                        : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    <span>{emoji}</span>
+                    <span className="text-[10px] font-mono">
+                      {Array.isArray(uids) ? uids.length : 1}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div>
               <span className="text-xs font-bold text-slate-900 dark:text-white">
@@ -444,12 +713,140 @@ export const PostDetailModal: React.FC = () => {
                       {emoji}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEmojiPicker(false);
+                      setShowCommentFullEmojiPicker(true);
+                    }}
+                    className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-indigo-600 text-xs font-bold"
+                    title="More emojis..."
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               )}
             </form>
           </div>
         </div>
       </div>
+
+      {/* Quote Dialog */}
+      {showQuoteDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <form
+            onSubmit={handleQuoteSubmit}
+            className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl p-4 space-y-3 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+              <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Repeat className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                Quote Post
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowQuoteDialog(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <textarea
+              value={quoteCaption}
+              onChange={e => setQuoteCaption(e.target.value)}
+              placeholder="Add your commentary (optional — leave empty to repost without quote)..."
+              rows={3}
+              className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-900 dark:text-white"
+              autoFocus
+            />
+
+            {/* Quoted Preview */}
+            <div className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex items-center gap-2 text-xs">
+              <img
+                src={post.mediaUrls[0]}
+                alt=""
+                className="w-10 h-10 rounded-md object-cover shrink-0"
+              />
+              <div className="truncate">
+                <div className="font-bold text-slate-900 dark:text-white">@{post.user.username}</div>
+                <div className="text-slate-400 truncate">{post.caption || 'Original post content'}</div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowQuoteDialog(false)}
+                className="px-3 py-1.5 text-xs text-slate-500 hover:underline"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                {quoteCaption.trim() ? 'Share Quote' : 'Post Without Quote'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Share Post Modal */}
+      {showShareModal && (
+        <SharePostModal
+          isOpen={showShareModal}
+          post={post}
+          onClose={() => setShowShareModal(false)}
+          onOpenQuote={() => {
+            setShowShareModal(false);
+            setShowQuoteDialog(true);
+          }}
+        />
+      )}
+
+      {/* Unrestricted Post Reaction Picker Modal */}
+      {showFullEmojiPicker && (
+        <EmojiPickerModal
+          isOpen={showFullEmojiPicker}
+          allowedEmojis={post.allowedEmojis}
+          onSelectEmoji={(emoji) => {
+            reactToPost(post.id, emoji);
+            setShowFullEmojiPicker(false);
+          }}
+          onClose={() => setShowFullEmojiPicker(false)}
+          title="React to this post"
+        />
+      )}
+
+      {/* Comment Emoji Picker Modal (to insert any emoji into comment) */}
+      {showCommentFullEmojiPicker && (
+        <EmojiPickerModal
+          isOpen={showCommentFullEmojiPicker}
+          onSelectEmoji={(emoji) => {
+            addEmoji(emoji);
+            setShowCommentFullEmojiPicker(false);
+          }}
+          onClose={() => setShowCommentFullEmojiPicker(false)}
+          title="Insert Emoji into Comment"
+        />
+      )}
+
+      {/* Post Owner Emoji Restriction Settings Modal */}
+      {showEmojiSettingsModal && (
+        <PostEmojiSettingsModal
+          isOpen={showEmojiSettingsModal}
+          initialAllowed={post.allowedEmojis}
+          initialRestricted={post.restrictedEmojis}
+          onSave={(allowed, restricted) => {
+            updatePostEmojiSettings(post.id, allowed, restricted);
+            setShowEmojiSettingsModal(false);
+            showToast('Post emoji reaction settings updated');
+          }}
+          onClose={() => setShowEmojiSettingsModal(false)}
+        />
+      )}
 
       {/* Confirmation Modal */}
       <ConfirmationModal

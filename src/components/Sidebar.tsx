@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   Home,
-  Search,
   Compass,
   Film,
   Send,
@@ -10,15 +9,26 @@ import {
   Sun,
   Moon,
   Feather,
-  Bookmark,
-  Sparkles,
   Shield,
   UserPlus,
-  Users
+  Settings
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useNavigate } from 'react-router-dom';
+
+interface SidebarNavItem {
+  id: string;
+  label: string;
+  icon?: any;
+  path?: string;
+  onClick?: () => void;
+  badge?: number;
+  isProfile?: boolean;
+  shortcut?: string;
+}
 
 export const Sidebar: React.FC = () => {
+  const navigate = useNavigate();
   const {
     activeTab,
     setActiveTab,
@@ -30,33 +40,37 @@ export const Sidebar: React.FC = () => {
     setIsCreateModalOpen,
     openUserProfile,
     openLegalModal,
-    setIsCreateAccountModalOpen
+    setIsCreateAccountModalOpen,
+    t
   } = useApp();
 
-  const navItems = [
-    { id: 'feed', label: 'Home', icon: Home },
-    { id: 'reels', label: 'Reels', icon: Film },
-    { id: 'communities', label: 'Communities', icon: Users },
+  // Navigation order: Home -> Reels -> Messages -> Explore -> Notifications -> Create -> Profile
+  const navItems: SidebarNavItem[] = [
+    { id: 'feed', label: t('nav.home'), icon: Home, path: '/app/home' },
+    { id: 'reels', label: t('nav.reels'), icon: Film, path: '/app/reels' },
     {
       id: 'messages',
-      label: 'Messages',
+      label: t('nav.messages'),
       icon: Send,
+      path: '/app/chats',
       badge: unreadMessagesCount > 0 ? unreadMessagesCount : undefined
     },
-    { id: 'explore', label: 'Explore', icon: Compass },
+    { id: 'explore', label: t('nav.explore'), icon: Compass, path: '/app/explore' },
     {
       id: 'notifications',
-      label: 'Notifications',
+      label: t('nav.notifications'),
       icon: Heart,
+      path: '/app/notifications',
       badge: unreadNotifsCount > 0 ? unreadNotifsCount : undefined
     },
     {
       id: 'create',
-      label: 'Create',
+      label: t('nav.create'),
       icon: PenSquare,
       onClick: () => setIsCreateModalOpen(true)
     },
-    { id: 'profile', label: 'Profile', isProfile: true }
+    { id: 'profile', label: t('nav.profile'), isProfile: true, path: '/app/profile' },
+    { id: 'settings', label: 'Settings', icon: Settings, path: '/app/settings' }
   ];
 
   return (
@@ -69,7 +83,10 @@ export const Sidebar: React.FC = () => {
         {/* Brand Logo */}
         <div
           id="sidebar-logo"
-          onClick={() => setActiveTab('feed')}
+          onClick={() => {
+            setActiveTab('feed');
+            navigate('/app/home');
+          }}
           className="cursor-pointer px-2 xl:px-3 py-2 flex items-center gap-3 transition-opacity hover:opacity-85"
         >
           <div className="xl:hidden flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-tr from-yellow-400 via-pink-500 to-indigo-500 text-white shadow-xs">
@@ -97,8 +114,10 @@ export const Sidebar: React.FC = () => {
                     item.onClick();
                   } else if (item.id === 'profile') {
                     openUserProfile(currentUser.id);
+                    navigate('/app/profile');
                   } else {
                     setActiveTab(item.id as any);
+                    if (item.path) navigate(item.path);
                   }
                 }}
                 className={`relative flex items-center justify-center xl:justify-start space-x-3.5 p-3 rounded-lg transition-colors group text-left ${
@@ -119,21 +138,33 @@ export const Sidebar: React.FC = () => {
                     />
                   </div>
                 ) : Icon ? (
-                  <div className="relative shrink-0">
+                  <div className="relative shrink-0 flex items-center justify-center">
                     <Icon
                       className={`w-5 h-5 transition-transform group-hover:scale-105 ${
                         isActive ? 'stroke-[2.4px]' : 'stroke-[1.8px]'
                       }`}
                     />
                     {item.badge !== undefined && (
-                      <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold text-white leading-none shadow-xs">
-                        {item.badge}
+                      <span
+                        id={`sidebar-badge-${item.id}`}
+                        className="absolute -top-2 -right-2.5 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-indigo-600 text-[9px] font-bold text-white leading-none shadow-sm ring-2 ring-white dark:ring-slate-900 transition-transform animate-in zoom-in-75"
+                      >
+                        {item.badge > 99 ? '99+' : item.badge}
                       </span>
                     )}
                   </div>
                 ) : null}
 
                 <span className="hidden xl:inline text-sm">{item.label}</span>
+                {item.badge !== undefined ? (
+                  <span className="hidden xl:inline-flex ml-auto items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
+                ) : item.shortcut ? (
+                  <span className="hidden xl:inline-block ml-auto text-[10px] font-mono text-zinc-400 dark:text-zinc-500 bg-slate-100 dark:bg-zinc-800/90 px-1.5 py-0.5 rounded border border-slate-200 dark:border-zinc-700/60">
+                    {item.shortcut}
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -142,23 +173,30 @@ export const Sidebar: React.FC = () => {
 
       {/* Bottom Controls */}
       <div className="flex flex-col space-y-1.5 pt-3 border-t border-slate-200 dark:border-slate-800 mt-auto">
-        {/* Create Account Action */}
+        {/* Add / Switch Account Action */}
         <button
           id="sidebar-create-account-btn"
           onClick={() => setIsCreateAccountModalOpen(true)}
           className="flex items-center justify-center xl:justify-start space-x-3.5 p-2 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
-          title="Create Account or Switch"
+          title="Add Account or Switch"
         >
           <UserPlus className="w-5 h-5 shrink-0" />
-          <span className="hidden xl:inline text-xs font-bold">Create Account</span>
+          <span className="hidden xl:inline text-xs font-bold">Add Account</span>
         </button>
 
         {/* Yaawp Legal & Privacy Center */}
         <button
           id="sidebar-legal-center-btn"
-          onClick={() => openLegalModal('terms')}
-          className="flex items-center justify-center xl:justify-start space-x-3.5 p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
-          title="Yaawp Terms & Privacy Policy"
+          onClick={() => {
+            openLegalModal('terms');
+            navigate('/app/legal');
+          }}
+          className={`flex items-center justify-center xl:justify-start space-x-3.5 p-2 rounded-lg transition-colors ${
+            activeTab === 'legal'
+              ? 'bg-slate-50 dark:bg-slate-800 font-semibold text-indigo-600 dark:text-indigo-400'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+          }`}
+          title="Yaawp Terms & Privacy Policy (Wrinkle Textured Page)"
         >
           <Shield className="w-5 h-5 shrink-0" />
           <span className="hidden xl:inline text-xs font-semibold">Terms &amp; Privacy</span>
@@ -184,8 +222,11 @@ export const Sidebar: React.FC = () => {
         {/* User preview profile card */}
         <button
           id="sidebar-profile-switch"
-          onClick={() => setActiveTab('profile')}
-          className="flex items-center space-x-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors text-left"
+          onClick={() => {
+            openUserProfile(currentUser.id);
+            navigate('/app/profile');
+          }}
+          className="flex items-center space-x-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors text-left cursor-pointer"
         >
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-indigo-500 p-[2px] shrink-0">
             <div className="w-full h-full rounded-full bg-white dark:bg-slate-900 p-[2px]">

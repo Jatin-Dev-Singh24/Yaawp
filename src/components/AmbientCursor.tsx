@@ -25,6 +25,14 @@ export const AmbientCursor: React.FC = () => {
       const yPercent = ((e.clientY / window.innerHeight) * 100).toFixed(1) + '%';
       document.documentElement.style.setProperty('--mouse-x', xPercent);
       document.documentElement.style.setProperty('--mouse-y', yPercent);
+
+      // Local precision tracking on hovered ambient-glow cards and containers
+      const targetGlow = (e.target as HTMLElement | null)?.closest?.('.ambient-glow') as HTMLElement | null;
+      if (targetGlow) {
+        const rect = targetGlow.getBoundingClientRect();
+        targetGlow.style.setProperty('--local-mouse-x', `${(e.clientX - rect.left).toFixed(1)}px`);
+        targetGlow.style.setProperty('--local-mouse-y', `${(e.clientY - rect.top).toFixed(1)}px`);
+      }
     };
 
     window.addEventListener('pointermove', handlePointerMove, { passive: true });

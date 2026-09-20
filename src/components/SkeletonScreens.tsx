@@ -169,3 +169,82 @@ export const ReelSkeleton: React.FC = () => {
     </div>
   );
 };
+
+/**
+ * Content-specific Skeleton for Profile View.
+ * Matches profile header geometry, bio, stats, story highlights, and grid posts.
+ */
+export const ProfileSkeleton: React.FC = () => {
+  return (
+    <div id="profile-skeleton-view" className="w-full max-w-4xl mx-auto py-6 px-3 md:px-8 select-none animate-in fade-in duration-200">
+      {/* Top Header Card Skeleton */}
+      <div className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-10 pb-8 border-b border-slate-200 dark:border-zinc-800/80">
+        {/* Avatar Skeleton */}
+        <div className="w-20 h-20 md:w-32 md:h-32 rounded-full bg-slate-200 dark:bg-zinc-800 animate-pulse shrink-0 ring-4 ring-slate-100 dark:ring-zinc-800/50" />
+
+        {/* Info Column Skeleton */}
+        <div className="flex-1 text-center md:text-left space-y-4 w-full">
+          {/* Top Row: Username & Buttons */}
+          <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+            <div className="w-36 h-6 rounded-lg bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+            <div className="w-24 h-8 rounded-xl bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+            <div className="w-24 h-8 rounded-xl bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+          </div>
+
+          {/* Stats Row */}
+          <div className="flex items-center justify-center md:justify-start gap-6 md:gap-8 pt-1">
+            <div className="flex items-center gap-1.5">
+              <div className="w-8 h-4 rounded-md bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+              <div className="w-10 h-3 rounded-md bg-slate-100 dark:bg-zinc-800/60 animate-pulse" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-12 h-4 rounded-md bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+              <div className="w-14 h-3 rounded-md bg-slate-100 dark:bg-zinc-800/60 animate-pulse" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-10 h-4 rounded-md bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+              <div className="w-14 h-3 rounded-md bg-slate-100 dark:bg-zinc-800/60 animate-pulse" />
+            </div>
+          </div>
+
+          {/* Bio Lines */}
+          <div className="space-y-2 pt-1 max-w-md mx-auto md:mx-0">
+            <div className="w-32 h-3.5 rounded-md bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+            <div className="w-full h-3 rounded-md bg-slate-150 dark:bg-zinc-800/70 animate-pulse" />
+            <div className="w-3/4 h-3 rounded-md bg-slate-150 dark:bg-zinc-800/70 animate-pulse" />
+          </div>
+        </div>
+      </div>
+
+      {/* Story Highlights Skeleton Row */}
+      <div className="py-6 flex items-center gap-5 overflow-x-auto no-scrollbar border-b border-slate-200 dark:border-zinc-800/60">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={`highlight-skel-${i}`} className="flex flex-col items-center gap-2 shrink-0">
+            <div className="w-16 h-16 md:w-18 md:h-18 rounded-full bg-slate-200 dark:bg-zinc-800 p-0.5 animate-pulse ring-2 ring-slate-100 dark:ring-zinc-800" />
+            <div className="w-12 h-2.5 rounded-md bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+          </div>
+        ))}
+      </div>
+
+      {/* Tab Navigation Skeleton */}
+      <div className="flex items-center justify-around py-4 border-b border-slate-200 dark:border-zinc-800/60">
+        <div className="w-16 h-4 rounded-md bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+        <div className="w-16 h-4 rounded-md bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+        <div className="w-16 h-4 rounded-md bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+        <div className="w-16 h-4 rounded-md bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+      </div>
+
+      {/* Grid Posts Skeleton */}
+      <div className="grid grid-cols-3 gap-1 md:gap-3 pt-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div
+            key={`profile-grid-skel-${i}`}
+            className="aspect-square rounded-lg md:rounded-xl bg-slate-200 dark:bg-zinc-800/90 animate-pulse overflow-hidden relative flex items-center justify-center"
+          >
+            <ImageIcon className="w-8 h-8 text-slate-300 dark:text-zinc-700 stroke-[1.2]" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};

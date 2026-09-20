@@ -19,7 +19,17 @@ import {
   Trash2,
   Archive,
   Sliders,
-  Plus
+  Plus,
+  Clock,
+  Flag,
+  Ban,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Video,
+  FileText,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Post } from '../types';
@@ -30,6 +40,16 @@ import { PostEmojiSettingsModal } from './PostEmojiSettingsModal';
 import { ConfirmationModal } from './ConfirmationModal';
 import { SharePostModal } from './SharePostModal';
 import { EmojiPickerModal } from './EmojiPickerModal';
+import { ReportPostModal } from './ReportPostModal';
+import { FormattedText } from './FormattedText';
+import { EmojiKitchenModal } from './EmojiKitchenModal';
+import { EmojiBlendSuggestionBanner } from './EmojiBlendSuggestionBanner';
+import {
+  detectEmojiBlendInText,
+  formatBlendToken,
+  getBlendById,
+  EmojiBlend
+} from '../data/emojiKitchen';
 
 interface PostCardProps {
   post: Post;
@@ -55,8 +75,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     updatePostEmojiSettings,
     deletePost,
     archivePost,
+    blockUser,
     posts,
-    allUsers
+    allUsers,
+    t
   } = useApp();
 
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
@@ -66,8 +88,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showWhyModal, setShowWhyModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showFullEmojiPicker, setShowFullEmojiPicker] = useState(false);
+  const [showCommentKitchenModal, setShowCommentKitchenModal] = useState(false);
+  const [dismissedCommentBlendKey, setDismissedCommentBlendKey] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showQuoteDialog, setShowQuoteDialog] = useState(false);
   const [quoteCaption, setQuoteCaption] = useState('');
@@ -94,6 +119,22 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const isHeartLongPressRef = useRef(false);
   const countHoldTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isCountLongPressRef = useRef(false);
+
+  // Video playback states
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [isVideoMuted, setIsVideoMuted] = useState(true);
+
+  const toggleVideoPlay = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!videoRef.current) return;
+    if (videoRef.current.paused) {
+      videoRef.current.play().then(() => setIsVideoPlaying(true)).catch(() => {});
+    } else {
+      videoRef.current.pause();
+      setIsVideoPlaying(false);
+    }
+  };
 
   const isFollowingAuthor = followedUserIds.includes(post.user.id);
   const lastTapRef = useRef<number>(0);
@@ -250,7 +291,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   return (
     <article
       id={`post-card-${post.id}`}
-      className="w-full max-w-[480px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl mb-6 overflow-hidden shadow-sm flex flex-col mx-auto transition-colors"
+      className="w-full max-w-[480px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl mb-6 overflow-hidden shadow-sm flex flex-col mx-auto ambient-glow transition-all"
     >
       {/* Repost or Quote attribution banner */}
       {(post.quotePost || post.repostedBy || post.isReposted) && (
@@ -301,6 +342,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                   {audienceCircle.icon} {audienceCircle.name}
                 </span>
               )}
+              {post.isScheduled && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-1">
+                  <Clock className="w-2.5 h-2.5" /> Scheduled
+                </span>
+              )}
             </div>
             <div className="flex items-center space-x-1 text-[10px] text-slate-500 dark:text-slate-400">
               {post.location ? (
@@ -333,25 +379,95 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         </div>
       </div>
 
-      {/* Media / Carousel Container */}
-      <div
-        className="relative w-full aspect-square bg-slate-100 dark:bg-slate-950 select-none overflow-hidden cursor-pointer"
-        onClick={handleMediaClick}
-      >
-        {!isImageLoaded && (
-          <div className="absolute inset-0 bg-slate-150 dark:bg-slate-850 animate-shimmer flex items-center justify-center z-5">
-            <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 animate-pulse" />
+      {/* Text Post Body OR Media / Video / Carousel Container */}
+      {post.isTextPost || (post.mediaUrls.length === 0 && !post.videoUrl) ? (
+        <div
+          onClick={handleMediaClick}
+          className="px-5 py-4 sm:px-6 sm:py-5 border-y border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-900/30 cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-900/50 transition-colors"
+        >
+          <div className="text-base sm:text-lg text-slate-900 dark:text-slate-100 font-normal leading-relaxed whitespace-pre-line break-words">
+            <FormattedText text={post.caption} />
           </div>
+        </div>
+      ) : (
+        <div
+          className="relative w-full aspect-square bg-slate-100 dark:bg-slate-950 select-none overflow-hidden cursor-pointer"
+          onClick={handleMediaClick}
+        >
+        {post.videoUrl ? (
+          <div className="relative w-full h-full bg-black flex items-center justify-center">
+            <video
+              ref={videoRef}
+              src={post.videoUrl}
+              poster={post.mediaUrls[0]}
+              playsInline
+              loop
+              muted={isVideoMuted}
+              onPlay={() => setIsVideoPlaying(true)}
+              onPause={() => setIsVideoPlaying(false)}
+              className="w-full h-full object-contain"
+              onClick={toggleVideoPlay}
+            />
+
+            {/* Video Controls Overlay */}
+            <div className="absolute bottom-3 right-3 flex items-center gap-1.5 z-10">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsVideoMuted(!isVideoMuted);
+                }}
+                className="p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs transition-colors"
+                aria-label={isVideoMuted ? 'Unmute video' : 'Mute video'}
+              >
+                {isVideoMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+
+            {/* Play overlay button if paused */}
+            {!isVideoPlaying && (
+              <div
+                onClick={toggleVideoPlay}
+                className="absolute inset-0 flex items-center justify-center bg-black/30 cursor-pointer z-10"
+              >
+                <div className="w-12 h-12 rounded-full bg-white/90 text-slate-900 flex items-center justify-center shadow-lg transition-transform hover:scale-110">
+                  <Play className="w-5 h-5 ml-0.5 fill-slate-900" />
+                </div>
+              </div>
+            )}
+
+            {/* Video Badge */}
+            <div className="absolute top-3 left-3 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs font-mono z-10">
+              <Video className="w-3 h-3 text-red-400" />
+              <span>Video</span>
+            </div>
+          </div>
+        ) : (
+          <>
+            {!isImageLoaded && (
+              <div className="absolute inset-0 bg-slate-150 dark:bg-slate-850 animate-shimmer flex items-center justify-center z-5">
+                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 animate-pulse" />
+              </div>
+            )}
+            <img
+              src={post.mediaUrls[currentMediaIndex]}
+              alt={`Post by ${post.user.username}`}
+              onLoad={() => setIsImageLoaded(true)}
+              className={`w-full h-full object-cover transition-[transform,opacity] duration-300 ${
+                isImageLoaded ? 'opacity-100' : 'opacity-0'
+              } ${post.filterClass || 'filter-normal'}`}
+              loading="lazy"
+            />
+
+            {/* Text Post Badge */}
+            {post.isTextPost && (
+              <div className="absolute top-3 left-3 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs font-semibold z-10">
+                <FileText className="w-3 h-3 text-indigo-400" />
+                <span>Text Post</span>
+              </div>
+            )}
+          </>
         )}
-        <img
-          src={post.mediaUrls[currentMediaIndex]}
-          alt={`Post by ${post.user.username}`}
-          onLoad={() => setIsImageLoaded(true)}
-          className={`w-full h-full object-cover transition-[transform,opacity] duration-300 ${
-            isImageLoaded ? 'opacity-100' : 'opacity-0'
-          } ${post.filterClass || 'filter-normal'}`}
-          loading="lazy"
-        />
 
         {/* Double tap heart animation overlay */}
         <AnimatePresence>
@@ -412,6 +528,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           </>
         )}
       </div>
+      )}
 
       {/* Action Buttons & Content */}
       <div className="p-4 space-y-3 shrink-0">
@@ -524,23 +641,36 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         {/* Aggregated Expressive Reactions Display */}
         {post.reactions && Object.keys(post.reactions).length > 0 && (
           <div className="flex flex-wrap items-center gap-1 pt-0.5">
-            {Object.entries(post.reactions).map(([emoji, uids]) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => reactToPost(post.id, emoji)}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all cursor-pointer ${
-                  post.userReaction === emoji
-                    ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                <span>{emoji}</span>
-                <span className="text-[10px] font-mono">
-                  {Array.isArray(uids) ? uids.length : 1}
-                </span>
-              </button>
-            ))}
+            {Object.entries(post.reactions).map(([emoji, uids]) => {
+              const isKitchenBlend = emoji.startsWith('[kitchen:');
+              const blend = isKitchenBlend ? getBlendById(emoji.slice(9, -1)) : null;
+              return (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => reactToPost(post.id, emoji)}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all cursor-pointer ${
+                    post.userReaction === emoji
+                      ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                  }`}
+                  title={blend ? `${blend.name} (${blend.emoji1} + ${blend.emoji2})` : emoji}
+                >
+                  {blend ? (
+                    <img
+                      src={blend.assetUrl}
+                      alt={blend.name}
+                      className="w-4 h-4 object-contain inline-block select-none"
+                    />
+                  ) : (
+                    <span>{emoji}</span>
+                  )}
+                  <span className="text-[10px] font-mono">
+                    {Array.isArray(uids) ? uids.length : 1}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -639,7 +769,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                   if (orig) setSelectedPostForModal(orig);
                 }
               }}
-              className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-850/90 hover:border-indigo-400/60 transition-colors cursor-pointer space-y-2 select-none"
+              className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-850/90 hover:border-lime-400/50 ambient-glow transition-all cursor-pointer space-y-2 select-none"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -656,9 +786,9 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                 </span>
               </div>
               {originalCaption && (
-                <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2">
-                  {originalCaption}
-                </p>
+                <div className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2">
+                  <FormattedText text={originalCaption} />
+                </div>
               )}
               {originalMedia && (
                 <div className="rounded-xl overflow-hidden aspect-video max-h-40 bg-black/5">
@@ -667,14 +797,16 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
               )}
             </div>
           </div>
-        ) : (
-          /* Standard Post */
+        ) : !post.isTextPost ? (
+          /* Standard Media Post Caption */
           <div className="text-sm leading-snug text-slate-900 dark:text-slate-100">
             <span className="font-bold mr-2 text-slate-900 dark:text-slate-100">
               {post.user.username}
             </span>
             <span>
-              {isLongCaption && !isCaptionExpanded ? `${post.caption.slice(0, 95)}... ` : post.caption}
+              <FormattedText
+                text={isLongCaption && !isCaptionExpanded ? `${post.caption.slice(0, 95)}... ` : post.caption}
+              />
             </span>
             {isLongCaption && !isCaptionExpanded && (
               <button
@@ -685,7 +817,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
               </button>
             )}
           </div>
-        )}
+        ) : null}
 
         {/* View all comments link */}
         {post.comments.length > 0 && (
@@ -699,34 +831,69 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
         {/* Recent comment snippet */}
         {post.comments.length > 0 && (
-          <div className="text-xs text-slate-700 dark:text-slate-300 truncate">
-            <span className="font-bold mr-1.5 text-slate-900 dark:text-slate-100">
+          <div className="text-xs text-slate-700 dark:text-slate-300 truncate flex items-center gap-1">
+            <span className="font-bold mr-1 text-slate-900 dark:text-slate-100 shrink-0">
               {post.comments[post.comments.length - 1].user.username}
             </span>
-            <span>{post.comments[post.comments.length - 1].text}</span>
+            <span className="truncate">
+              <FormattedText text={post.comments[post.comments.length - 1].text} />
+            </span>
           </div>
         )}
+
+        {/* Real-time Emoji Kitchen blend suggestion for comment */}
+        {(() => {
+          const detected = detectEmojiBlendInText(commentText);
+          if (detected && dismissedCommentBlendKey !== `${detected.blend.id}_${detected.match}`) {
+            return (
+              <div className="pt-1">
+                <EmojiBlendSuggestionBanner
+                  blend={detected.blend}
+                  onApplyBlend={blend => {
+                    const token = formatBlendToken(blend);
+                    setCommentText(prev => prev.replace(detected.match, `${token} `));
+                  }}
+                  onOpenKitchen={() => setShowCommentKitchenModal(true)}
+                  onDismiss={() => {
+                    setDismissedCommentBlendKey(`${detected.blend.id}_${detected.match}`);
+                  }}
+                />
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* Inline Comment Form */}
         <form
           onSubmit={handleAddComment}
           className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3 relative"
         >
-          <div className="flex items-center space-x-2 flex-1 mr-2">
+          <div className="flex items-center space-x-1.5 flex-1 mr-2">
             <button
               type="button"
               onClick={() => setShowEmojiPicker(prev => !prev)}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1"
               aria-label="Add emoji"
             >
               <Smile className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowCommentKitchenModal(true)}
+              className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 rounded-md text-xs"
+              title="Emoji Kitchen Lab"
+              aria-label="Emoji Kitchen"
+            >
+              🧪
             </button>
 
             <input
               type="text"
               value={commentText}
               onChange={e => setCommentText(e.target.value)}
-              placeholder="Add a comment..."
+              placeholder={t('post.addComment')}
               className="w-full text-sm bg-transparent text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
             />
           </div>
@@ -740,7 +907,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                 : 'text-slate-300 dark:text-slate-600 cursor-default'
             }`}
           >
-            Post
+            {t('post.postComment')}
           </button>
 
           {/* Quick emoji drawer */}
@@ -940,6 +1107,38 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             >
               Copy link
             </button>
+            {post.user.id !== currentUser.id && (
+              <>
+                <button
+                  id={`post-report-btn-${post.id}`}
+                  onClick={() => {
+                    setShowMenuModal(false);
+                    setShowReportModal(true);
+                  }}
+                  className="w-full py-3.5 font-medium hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center gap-2"
+                >
+                  <Flag className="w-4 h-4" />
+                  Report Post
+                </button>
+                <button
+                  id={`post-block-user-btn-${post.id}`}
+                  onClick={() => {
+                    setShowMenuModal(false);
+                    setConfirmModal({
+                      isOpen: true,
+                      title: `Block @${post.user.username}?`,
+                      message: `Are you sure you want to block @${post.user.username}? You won't see their posts or profile, and they won't be able to interact with you.`,
+                      variant: 'danger',
+                      action: () => blockUser(post.user.id)
+                    });
+                  }}
+                  className="w-full py-3.5 font-medium hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center gap-2"
+                >
+                  <Ban className="w-4 h-4" />
+                  Block @{post.user.username}
+                </button>
+              </>
+            )}
             <button
               onClick={() => setShowMenuModal(false)}
               className="w-full py-3.5 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60"
@@ -949,6 +1148,14 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           </div>
         </div>
       )}
+
+      {/* Report Post Modal */}
+      <ReportPostModal
+        isOpen={showReportModal}
+        postId={post.id}
+        authorUsername={post.user.username}
+        onClose={() => setShowReportModal(false)}
+      />
 
       {/* Why Am I Seeing This Modal */}
       <WhyAmISeeingThisModal
@@ -1008,8 +1215,26 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           isOpen={showFullEmojiPicker}
           allowedEmojis={post.allowedEmojis}
           onSelectEmoji={emoji => reactToPost(post.id, emoji)}
+          onSelectBlend={blend => {
+            reactToPost(post.id, formatBlendToken(blend));
+            setShowFullEmojiPicker(false);
+          }}
           onClose={() => setShowFullEmojiPicker(false)}
           title={`React to @${post.user.username}'s Post`}
+        />
+      )}
+
+      {/* Comment Emoji Kitchen Modal */}
+      {showCommentKitchenModal && (
+        <EmojiKitchenModal
+          isOpen={showCommentKitchenModal}
+          onClose={() => setShowCommentKitchenModal(false)}
+          onSelectBlend={blend => {
+            const token = formatBlendToken(blend);
+            setCommentText(prev => (prev ? `${prev} ${token}` : token));
+            setShowCommentKitchenModal(false);
+          }}
+          insertButtonLabel="Add to Comment"
         />
       )}
     </article>

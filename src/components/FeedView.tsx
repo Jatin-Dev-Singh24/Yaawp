@@ -319,7 +319,7 @@ export const FeedView: React.FC = () => {
         <section
           id="feed-algorithm-controls"
           aria-label="Feed Algorithm Controls"
-          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 mb-5 shadow-xs transition-colors"
+          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 mb-5 shadow-xs ambient-glow transition-all"
         >
           {/* Primary Feed Source Filter: Following vs For You vs Communities vs Circles vs Nearby */}
           <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800 flex-wrap">
@@ -472,7 +472,7 @@ export const FeedView: React.FC = () => {
                 {index === 1 && communities.length > 0 && (
                   <div
                     id="feed-community-discovery-card"
-                    className="w-full max-w-[480px] bg-gradient-to-br from-indigo-50/70 via-purple-50/40 to-pink-50/50 dark:from-slate-900 dark:via-indigo-950/30 dark:to-purple-950/30 border border-indigo-200/80 dark:border-indigo-900/60 rounded-2xl p-4 mb-6 shadow-xs"
+                    className="w-full max-w-[480px] bg-gradient-to-br from-indigo-50/70 via-purple-50/40 to-pink-50/50 dark:from-slate-900 dark:via-indigo-950/30 dark:to-purple-950/30 border border-indigo-200/80 dark:border-indigo-900/60 rounded-2xl p-4 mb-6 shadow-xs ambient-glow transition-all"
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">

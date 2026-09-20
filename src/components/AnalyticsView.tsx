@@ -244,7 +244,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {/* Post Reach Card */}
-        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs hover:border-lime-400/50 transition-colors">
+        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs hover:border-lime-400/50 ambient-glow transition-all">
           <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-2">
             <span className="text-xs font-semibold">Accounts Reached</span>
             <div className="p-1.5 rounded-xl bg-lime-400/10 text-lime-500 dark:text-lime-400">
@@ -264,7 +264,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         </div>
 
         {/* Profile Visits Card */}
-        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs hover:border-indigo-400/50 transition-colors">
+        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs hover:border-indigo-400/50 ambient-glow transition-all">
           <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-2">
             <span className="text-xs font-semibold">Profile Visits</span>
             <div className="p-1.5 rounded-xl bg-indigo-500/10 text-indigo-500">
@@ -284,7 +284,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         </div>
 
         {/* Follower Growth Card */}
-        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs hover:border-cyan-400/50 transition-colors">
+        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs hover:border-cyan-400/50 ambient-glow transition-all">
           <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-2">
             <span className="text-xs font-semibold">Audience Followers</span>
             <div className="p-1.5 rounded-xl bg-cyan-500/10 text-cyan-500">
@@ -304,7 +304,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         </div>
 
         {/* Engagement Rate Card */}
-        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs hover:border-rose-400/50 transition-colors">
+        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs hover:border-rose-400/50 ambient-glow transition-all">
           <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-2">
             <span className="text-xs font-semibold">Engagement Rate</span>
             <div className="p-1.5 rounded-xl bg-rose-500/10 text-rose-500">
@@ -325,7 +325,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       </div>
 
       {/* Chart 1: Post Reach & Impressions Trend (AreaChart) */}
-      <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4">
+      <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4 ambient-glow transition-all">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -431,7 +431,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       {/* Grid: Follower Growth Trends (LineChart) & Profile Discovery (BarChart) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Follower Growth Trends */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4">
+        <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4 ambient-glow transition-all">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Users className="w-4 h-4 text-cyan-500" />
@@ -494,7 +494,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         </div>
 
         {/* Profile Visits & Discovery BarChart */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4">
+        <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4 ambient-glow transition-all">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Activity className="w-4 h-4 text-indigo-500" />
@@ -545,7 +545,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       {/* Content Reach Distribution & Top Performing Posts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Content Breakdown PieChart */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4 lg:col-span-1">
+        <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4 lg:col-span-1 ambient-glow transition-all">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Layers className="w-4 h-4 text-purple-400" />
@@ -609,7 +609,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         </div>
 
         {/* Top Performing Posts Leaderboard */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4 lg:col-span-2">
+        <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4 lg:col-span-2 ambient-glow transition-all">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">

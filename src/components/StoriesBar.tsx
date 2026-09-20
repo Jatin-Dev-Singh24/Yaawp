@@ -19,7 +19,10 @@ export const StoriesBar: React.FC = () => {
   const userHasStory = stories.some(s => s.user.id === currentUser.id);
 
   return (
-    <div className="relative w-full max-w-[480px] md:max-w-xl mx-auto mb-6 group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs py-3.5 px-3">
+    <div
+      id="stories-bar-container"
+      className="relative w-full max-w-[480px] md:max-w-xl mx-auto mb-6 group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs py-3.5 px-3 ambient-glow transition-all"
+    >
       {/* Left Scroll Arrow */}
       <button
         onClick={() => scroll('left')}

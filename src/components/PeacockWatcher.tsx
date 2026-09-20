@@ -198,6 +198,13 @@ export const PeacockWatcher: React.FC<PeacockWatcherProps> = ({
     ? { duration: 0 }
     : { type: 'spring', stiffness: 140, damping: 18, mass: 0.85 };
 
+  // Wing transition: multi-keyframe flutter uses easeInOut tween, while eye cover/rest uses spring
+  const wingTransition = prefersReducedMotion
+    ? { duration: 0 }
+    : isFlapped
+    ? { duration: 0.65, ease: 'easeInOut' }
+    : { type: 'spring', stiffness: 140, damping: 18, mass: 0.85 };
+
   return (
     <div
       className="relative flex flex-col items-center justify-center select-none w-full max-w-[340px] sm:max-w-[380px] mx-auto overflow-visible cursor-pointer group"
@@ -537,7 +544,7 @@ export const PeacockWatcher: React.FC<PeacockWatcherProps> = ({
                     scale: 1,
                   }
             }
-            transition={smoothTransition}
+            transition={wingTransition}
             style={{ transformOrigin: '150px 185px' }}
           >
             {/* Wing Base */}
@@ -578,7 +585,7 @@ export const PeacockWatcher: React.FC<PeacockWatcherProps> = ({
                     scale: 1,
                   }
             }
-            transition={smoothTransition}
+            transition={wingTransition}
             style={{ transformOrigin: '210px 185px' }}
           >
             {/* Wing Base */}

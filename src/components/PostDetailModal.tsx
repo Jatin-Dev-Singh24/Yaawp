@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   X,
   Heart,
@@ -19,7 +19,11 @@ import {
   Copy,
   Check,
   Plus,
-  Sliders
+  Sliders,
+  Flag,
+  Ban,
+  UserCheck,
+  UserPlus
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ThreadedCommentTree } from './ThreadedCommentTree';
@@ -27,6 +31,15 @@ import { ConfirmationModal } from './ConfirmationModal';
 import { SharePostModal } from './SharePostModal';
 import { EmojiPickerModal } from './EmojiPickerModal';
 import { PostEmojiSettingsModal } from './PostEmojiSettingsModal';
+import { ReportPostModal } from './ReportPostModal';
+import { FormattedText } from './FormattedText';
+import { EmojiKitchenModal } from './EmojiKitchenModal';
+import { EmojiBlendSuggestionBanner } from './EmojiBlendSuggestionBanner';
+import {
+  detectEmojiBlendInText,
+  formatBlendToken,
+  getBlendById
+} from '../data/emojiKitchen';
 import { DEFAULT_QUICK_REACTIONS } from '../data/emojis';
 
 export const PostDetailModal: React.FC = () => {
@@ -49,7 +62,10 @@ export const PostDetailModal: React.FC = () => {
     archivePost,
     toggleHidePostFromGrid,
     reactToPost,
-    updatePostEmojiSettings
+    updatePostEmojiSettings,
+    blockUser,
+    toggleFollowUser,
+    followedUserIds
   } = useApp();
 
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
@@ -57,6 +73,7 @@ export const PostDetailModal: React.FC = () => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [showQuoteDialog, setShowQuoteDialog] = useState(false);
   const [quoteCaption, setQuoteCaption] = useState('');
   const [isEditingCaption, setIsEditingCaption] = useState(false);
@@ -65,6 +82,9 @@ export const PostDetailModal: React.FC = () => {
   const [showFullEmojiPicker, setShowFullEmojiPicker] = useState(false);
   const [showEmojiSettingsModal, setShowEmojiSettingsModal] = useState(false);
   const [showCommentFullEmojiPicker, setShowCommentFullEmojiPicker] = useState(false);
+  const [showCommentKitchenModal, setShowCommentKitchenModal] = useState(false);
+  const [dismissedCommentBlendKey, setDismissedCommentBlendKey] = useState<string | null>(null);
+  const commentInputRef = useRef<HTMLInputElement>(null);
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean;
     title: string;
@@ -163,7 +183,7 @@ export const PostDetailModal: React.FC = () => {
 
       {/* Main Container */}
       <div
-        className="relative w-full max-w-5xl h-full max-h-[85vh] bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-2xl flex flex-col md:flex-row border border-slate-200 dark:border-slate-800"
+        className="relative w-full max-w-5xl h-full max-h-[85vh] bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-2xl flex flex-col md:flex-row border border-slate-200 dark:border-slate-800 ambient-glow"
         onClick={e => e.stopPropagation()}
       >
         {/* Left Side: Media */}
@@ -343,6 +363,64 @@ export const PostDetailModal: React.FC = () => {
                     <Copy className="w-3.5 h-3.5 text-slate-400" />
                     Copy Link
                   </button>
+
+                  {post.user.id !== currentUser.id && (
+                    <>
+                      <button
+                        onClick={() => {
+                          toggleFollowUser(post.user.id);
+                          setShowOptionsMenu(false);
+                        }}
+                        className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
+                      >
+                        {followedUserIds.includes(post.user.id) ? (
+                          <>
+                            <UserCheck className="w-3.5 h-3.5 text-rose-500" />
+                            Unfollow @{post.user.username}
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="w-3.5 h-3.5 text-indigo-500" />
+                            Follow @{post.user.username}
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        id="modal-report-post-btn"
+                        onClick={() => {
+                          setShowOptionsMenu(false);
+                          setShowReportModal(true);
+                        }}
+                        className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2 text-rose-600 dark:text-rose-400"
+                      >
+                        <Flag className="w-3.5 h-3.5" />
+                        Report Post
+                      </button>
+
+                      <button
+                        id="modal-block-user-btn"
+                        onClick={() => {
+                          setShowOptionsMenu(false);
+                          setConfirmState({
+                            isOpen: true,
+                            title: `Block @${post.user.username}?`,
+                            message: `Are you sure you want to block @${post.user.username}? You won't see their posts or profile.`,
+                            confirmLabel: 'Block',
+                            variant: 'danger',
+                            action: () => {
+                              blockUser(post.user.id);
+                              setSelectedPostForModal(null);
+                            }
+                          });
+                        }}
+                        className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2 text-rose-600 dark:text-rose-400"
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                        Block @{post.user.username}
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -423,7 +501,7 @@ export const PostDetailModal: React.FC = () => {
                     >
                       {originalAuthor}
                     </span>
-                    <span>{originalCaption}</span>
+                    <span><FormattedText text={originalCaption} /></span>
                   </div>
                 )}
                 <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
@@ -448,7 +526,7 @@ export const PostDetailModal: React.FC = () => {
                       >
                         {post.user.username}
                       </span>
-                      {post.caption}
+                      <FormattedText text={post.caption} />
                     </p>
                     <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
                       {post.timestamp}
@@ -481,9 +559,9 @@ export const PostDetailModal: React.FC = () => {
                     </span>
                   </div>
                   {originalCaption && (
-                    <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2">
-                      {originalCaption}
-                    </p>
+                    <div className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2">
+                      <FormattedText text={originalCaption} />
+                    </div>
                   )}
                   {originalMedia && (
                     <div className="rounded-xl overflow-hidden aspect-video max-h-40 bg-black/5">
@@ -509,7 +587,7 @@ export const PostDetailModal: React.FC = () => {
                     >
                       {post.user.username}
                     </span>
-                    {post.caption}
+                    <FormattedText text={post.caption} />
                   </p>
                   <span className="text-[11px] text-slate-400 dark:text-slate-500 block">
                     {post.timestamp}
@@ -601,7 +679,7 @@ export const PostDetailModal: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => {}}
+                  onClick={() => commentInputRef.current?.focus()}
                   className="p-1 hover:scale-110 transition-transform"
                   title="Comment"
                 >
@@ -641,23 +719,36 @@ export const PostDetailModal: React.FC = () => {
             {/* Aggregated Expressive Reaction Chips */}
             {post.reactions && Object.keys(post.reactions).length > 0 && (
               <div className="flex flex-wrap items-center gap-1 pt-1">
-                {Object.entries(post.reactions).map(([emoji, uids]) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => reactToPost(post.id, emoji)}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all cursor-pointer ${
-                      post.userReaction === emoji
-                        ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                    }`}
-                  >
-                    <span>{emoji}</span>
-                    <span className="text-[10px] font-mono">
-                      {Array.isArray(uids) ? uids.length : 1}
-                    </span>
-                  </button>
-                ))}
+                {Object.entries(post.reactions).map(([emoji, uids]) => {
+                  const isKitchenBlend = emoji.startsWith('[kitchen:');
+                  const blend = isKitchenBlend ? getBlendById(emoji.slice(9, -1)) : null;
+                  return (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => reactToPost(post.id, emoji)}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all cursor-pointer ${
+                        post.userReaction === emoji
+                          ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold'
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                      }`}
+                      title={blend ? `${blend.name} (${blend.emoji1} + ${blend.emoji2})` : emoji}
+                    >
+                      {blend ? (
+                        <img
+                          src={blend.assetUrl}
+                          alt={blend.name}
+                          className="w-4 h-4 object-contain inline-block select-none"
+                        />
+                      ) : (
+                        <span>{emoji}</span>
+                      )}
+                      <span className="text-[10px] font-mono">
+                        {Array.isArray(uids) ? uids.length : 1}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
 
@@ -670,24 +761,59 @@ export const PostDetailModal: React.FC = () => {
               </span>
             </div>
 
+            {/* Real-time Emoji Kitchen blend suggestion for modal comment */}
+            {(() => {
+              const detected = detectEmojiBlendInText(commentText);
+              if (detected && dismissedCommentBlendKey !== `${detected.blend.id}_${detected.match}`) {
+                return (
+                  <div className="pt-1">
+                    <EmojiBlendSuggestionBanner
+                      blend={detected.blend}
+                      onApplyBlend={blend => {
+                        const token = formatBlendToken(blend);
+                        setCommentText(prev => prev.replace(detected.match, `${token} `));
+                      }}
+                      onOpenKitchen={() => setShowCommentKitchenModal(true)}
+                      onDismiss={() => {
+                        setDismissedCommentBlendKey(`${detected.blend.id}_${detected.match}`);
+                      }}
+                    />
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             {/* Comment input form */}
             <form
               onSubmit={handleAddComment}
-              className="relative flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800"
+              className="relative flex items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800"
             >
               <button
                 type="button"
                 onClick={() => setShowEmojiPicker(prev => !prev)}
-                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1"
+                aria-label="Emojis"
               >
                 <Smile className="w-4 h-4" />
               </button>
 
+              <button
+                type="button"
+                onClick={() => setShowCommentKitchenModal(true)}
+                className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 rounded-md text-xs"
+                title="Emoji Kitchen Lab"
+                aria-label="Emoji Kitchen"
+              >
+                🧪
+              </button>
+
               <input
+                ref={commentInputRef}
                 type="text"
                 value={commentText}
                 onChange={e => setCommentText(e.target.value)}
-                placeholder="Add a comment..."
+                placeholder="Add a comment... (mix emojis or stickers)"
                 className="flex-1 text-xs bg-transparent text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
               />
 
@@ -815,6 +941,10 @@ export const PostDetailModal: React.FC = () => {
             reactToPost(post.id, emoji);
             setShowFullEmojiPicker(false);
           }}
+          onSelectBlend={(blend) => {
+            reactToPost(post.id, formatBlendToken(blend));
+            setShowFullEmojiPicker(false);
+          }}
           onClose={() => setShowFullEmojiPicker(false)}
           title="React to this post"
         />
@@ -828,8 +958,27 @@ export const PostDetailModal: React.FC = () => {
             addEmoji(emoji);
             setShowCommentFullEmojiPicker(false);
           }}
+          onSelectBlend={(blend) => {
+            const token = formatBlendToken(blend);
+            setCommentText(prev => (prev ? `${prev} ${token}` : token));
+            setShowCommentFullEmojiPicker(false);
+          }}
           onClose={() => setShowCommentFullEmojiPicker(false)}
-          title="Insert Emoji into Comment"
+          title="Insert Emoji or Kitchen Blend into Comment"
+        />
+      )}
+
+      {/* Comment Emoji Kitchen Modal */}
+      {showCommentKitchenModal && (
+        <EmojiKitchenModal
+          isOpen={showCommentKitchenModal}
+          onClose={() => setShowCommentKitchenModal(false)}
+          onSelectBlend={(blend) => {
+            const token = formatBlendToken(blend);
+            setCommentText(prev => (prev ? `${prev} ${token}` : token));
+            setShowCommentKitchenModal(false);
+          }}
+          insertButtonLabel="Add to Comment"
         />
       )}
 
@@ -847,6 +996,14 @@ export const PostDetailModal: React.FC = () => {
           onClose={() => setShowEmojiSettingsModal(false)}
         />
       )}
+
+      {/* Report Post Modal */}
+      <ReportPostModal
+        isOpen={showReportModal}
+        postId={post.id}
+        authorUsername={post.user.username}
+        onClose={() => setShowReportModal(false)}
+      />
 
       {/* Confirmation Modal */}
       <ConfirmationModal

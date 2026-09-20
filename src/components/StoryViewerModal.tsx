@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
 import { ConfirmationModal } from './ConfirmationModal';
 import { ThreadedCommentTree } from './ThreadedCommentTree';
+import { StoryPollComponent } from './story/StoryPollComponent';
 
 export const StoryViewerModal: React.FC = () => {
   const {
@@ -17,7 +18,10 @@ export const StoryViewerModal: React.FC = () => {
     archiveStory,
     deleteStory,
     addStoryComment,
-    openUserProfile
+    likeStoryComment,
+    deleteStoryComment,
+    openUserProfile,
+    voteStoryPoll
   } = useApp();
 
   const [progress, setProgress] = useState(0);
@@ -350,9 +354,29 @@ export const StoryViewerModal: React.FC = () => {
             ))}
           </AnimatePresence>
 
+          {/* Interactive Story Poll */}
+          {currentStory.poll && (
+            <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 z-35 flex justify-center pointer-events-auto">
+              <StoryPollComponent
+                poll={currentStory.poll}
+                storyId={currentStory.id}
+                onVote={(optionId) => {
+                  voteStoryPoll(currentStory.id, optionId);
+                  showToast('Vote counted!');
+                  setIsPaused(true);
+                  setTimeout(() => setIsPaused(false), 3500);
+                }}
+                onPause={() => setIsPaused(true)}
+                onResume={() => setIsPaused(false)}
+              />
+            </div>
+          )}
+
           {/* Story Caption */}
           {currentStory.caption && (
-            <div className="absolute bottom-24 inset-x-4 z-30 bg-black/50 backdrop-blur-xs p-3 rounded-xl text-white text-sm text-center">
+            <div className={`absolute inset-x-4 z-30 bg-black/50 backdrop-blur-xs p-3 rounded-xl text-white text-sm text-center ${
+              currentStory.poll ? 'bottom-16' : 'bottom-24'
+            }`}>
               {currentStory.caption}
             </div>
           )}
@@ -443,7 +467,8 @@ export const StoryViewerModal: React.FC = () => {
                       addStoryComment(currentStory.id, text, parentId);
                       showToast('Reply posted');
                     }}
-                    onLikeComment={() => {}}
+                    onLikeComment={(commentId) => likeStoryComment(currentStory.id, commentId)}
+                    onDeleteComment={(commentId) => deleteStoryComment(currentStory.id, commentId)}
                     onOpenUserProfile={userId => {
                       setActiveStoryUserIndex(null);
                       openUserProfile(userId);

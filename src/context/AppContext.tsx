@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import type { Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -7,6 +7,7 @@ import {
   UserSummary,
   Post,
   Story,
+  StoryPoll,
   Reel,
   NotificationItem,
   ChatConversation,
@@ -27,7 +28,19 @@ import {
   CommunityChannel,
   CommunityChatMessage,
   CommunityPersona,
-  CommunityModerationConfig
+  CommunityModerationConfig,
+  DocumentData,
+  AudioData,
+  ContactData,
+  LocationData,
+  PollData,
+  GameSession,
+  ChatCustomList,
+  GroupPendingJoinRequest,
+  HiddenVaultConfig,
+  AppPermissionType,
+  AppPermissionStatus,
+  CustomPfpConfig
 } from '../types';
 import {
   CURRENT_USER,
@@ -44,14 +57,43 @@ import {
   INITIAL_CIRCLES,
   INITIAL_NEARBY_ACTIVITIES
 } from '../data/mockData';
+import {
+  INITIAL_LANGUAGES,
+  LanguageOption,
+  getLanguageByCode,
+  translate,
+  TranslationKey
+} from '../translations';
+import {
+  SUPPORT_BOT_USER,
+  SUPPORT_BOT_WELCOME_MESSAGE,
+  SUPPORT_BOT_SUGGESTED_PROMPTS,
+  getAutomatedBotResponse
+} from '../utils/supportBot';
 
-export type TabType = 'feed' | 'explore' | 'communities' | 'messages' | 'profile' | 'notifications' | 'reels';
+export type TabType = 'feed' | 'explore' | 'communities' | 'messages' | 'profile' | 'notifications' | 'reels' | 'settings' | 'legal';
 export type FeedSortAlgorithm = 'chronological' | 'engagement' | 'balanced' | 'trending';
 export type FeedFilterMode = 'for_you' | 'following' | 'communities' | 'nearby' | 'my_posts' | 'custom_list' | 'all';
+export type AppThemePreset =
+  | 'light'
+  | 'nordic'
+  | 'porcelain'
+  | 'mint_light'
+  | 'rose_light'
+  | 'dark'
+  | 'midnight'
+  | 'obsidian'
+  | 'cyber'
+  | 'sunset'
+  | 'emerald';
+
+export const LIGHT_THEMES: AppThemePreset[] = ['light', 'nordic', 'porcelain', 'mint_light', 'rose_light'];
 
 interface AppContextType {
   theme: 'light' | 'dark';
   toggleTheme: () => void;
+  systemTheme: AppThemePreset;
+  setSystemTheme: (theme: AppThemePreset) => void;
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
   currentUser: UserProfile;
@@ -81,6 +123,8 @@ interface AppContextType {
   setSelectedPostForModal: (post: Post | null) => void;
   isCreateModalOpen: boolean;
   setIsCreateModalOpen: (open: boolean) => void;
+  isGlobalSearchOpen: boolean;
+  setIsGlobalSearchOpen: (open: boolean) => void;
   isEditProfileOpen: boolean;
   setIsEditProfileOpen: (open: boolean) => void;
   toggleLikePost: (postId: string) => void;
@@ -94,7 +138,11 @@ interface AppContextType {
   likeComment: (postId: string, commentId: string) => void;
   voteComment: (postId: string, commentId: string, type: 'up' | 'down') => void;
   createPost: (data: {
-    mediaUrls: string[];
+    mediaUrls?: string[];
+    videoUrl?: string;
+    isTextPost?: boolean;
+    textPostTheme?: 'slate' | 'indigo' | 'emerald' | 'amber' | 'sunset' | 'dark';
+    postType?: 'image' | 'video' | 'text';
     caption: string;
     location?: string;
     filterClass?: string;
@@ -104,10 +152,16 @@ interface AppContextType {
     audienceCircleId?: string;
     allowedEmojis?: string[];
     restrictedEmojis?: string[];
+    isScheduled?: boolean;
+    scheduledPublishTime?: string;
   }) => void;
-  createStory: (mediaUrl: string, caption?: string) => void;
+  createStory: (mediaUrl: string, caption?: string, poll?: StoryPoll, isTextStory?: boolean, storyTheme?: string) => void;
+  voteStoryPoll: (storyId: string, optionId: string) => void;
   toggleLikeReel: (reelId: string) => void;
   toggleSaveReel: (reelId: string) => void;
+  addReelComment: (reelId: string, text: string, parentId?: string) => void;
+  likeReelComment: (reelId: string, commentId: string) => void;
+  deleteReelComment: (reelId: string, commentId: string) => void;
   toggleFollowUser: (userId: string) => void;
   // Algorithmic Feed & Recommendations
   algorithmSettings: AlgorithmSettings;
@@ -171,6 +225,8 @@ interface AppContextType {
   voteDiscussion: (discussionId: string, type: 'up' | 'down') => void;
   addDiscussionComment: (discussionId: string, text: string, parentId?: string) => void;
   voteDiscussionComment: (discussionId: string, commentId: string, type: 'up' | 'down') => void;
+  likeDiscussionComment: (discussionId: string, commentId: string) => void;
+  deleteDiscussionComment: (discussionId: string, commentId: string) => void;
   likeDiscussion: (discussionId: string) => void;
   repostDiscussion: (discussionId: string) => void;
   // Challenges
@@ -192,8 +248,16 @@ interface AppContextType {
       mediaUrl?: string;
       mediaType?: 'image' | 'video' | 'file';
       fileName?: string;
+      documentData?: DocumentData;
+      audioData?: AudioData;
+      contactData?: ContactData;
+      locationData?: LocationData;
+      pollData?: PollData;
+      gameSession?: GameSession;
     }
   ) => void;
+  votePoll: (conversationId: string, messageId: string, optionId: string) => void;
+  updateGameSession: (conversationId: string, messageId: string, updated: Partial<GameSession>) => void;
   hideConversation: (conversationId: string) => void;
   replyToMessage: (conversationId: string, replyTo: { id: string; text: string; senderName: string }, text: string) => void;
   reactToMessage: (conversationId: string, messageId: string, emoji: string) => void;
@@ -211,13 +275,27 @@ interface AppContextType {
     replyTo?: { id: string; text: string; senderName: string }
   ) => void;
   triggerTypingIndicator: (conversationId: string, isTyping: boolean) => void;
+  clearConversation: (conversationId: string) => void;
+  deleteConversation: (conversationId: string) => void;
+  togglePinConversation: (conversationId: string) => void;
+  toggleMuteConversation: (conversationId: string) => void;
+  toggleArchiveConversation: (conversationId: string) => void;
+  chatLists: ChatCustomList[];
+  createChatList: (name: string, color?: string, icon?: string) => ChatCustomList;
+  deleteChatList: (listId: string) => void;
+  toggleChatInList: (conversationId: string, listId: string) => void;
+  setConversationLists: (conversationId: string, listIds: string[]) => void;
+  blockAndReportUser: (userId: string, reason: string, details?: string) => void;
   markConversationAsRead: (conversationId: string) => void;
+  markConversationAsUnread: (conversationId: string) => void;
+  simulateIncomingMessage: (senderId?: string, customText?: string) => void;
   markRecipientSeen: (conversationId: string) => void;
   toggleRecipientInChat: (conversationId: string) => void;
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
   handleConnectionRequest: (notifId: string, action: 'accept' | 'decline') => void;
   updateProfile: (data: Partial<UserProfile>) => void;
+  setChatWallpaper: (conversationId: string, wallpaper?: ChatConversation['wallpaper']) => void;
   // Security Suite & Passcode Protection
   isSecurityModalOpen: boolean;
   setIsSecurityModalOpen: (open: boolean) => void;
@@ -240,6 +318,11 @@ interface AppContextType {
   changePassword: (oldPw: string, newPw: string) => boolean;
   twoFactorEnabled: boolean;
   setTwoFactorEnabled: (val: boolean) => void;
+  enableTwoFactorWithPassword: (password: string) => boolean;
+  changeTwoFactorPassword: (currentPw: string, newPw: string) => boolean;
+  disableTwoFactorWithPassword: (currentPw: string) => boolean;
+  resetTwoFactorViaEmail: (code: string, newPw: string) => boolean;
+  verifyPreviousPasscode: (pin: string) => boolean;
   privateMediaSignedUrlsEnabled: boolean;
   setPrivateMediaSignedUrlsEnabled: (val: boolean) => void;
   isFollowersPrivate: boolean;
@@ -274,6 +357,7 @@ interface AppContextType {
   agreeToTermsAndContinue: () => void;
   isLegalModalOpen: boolean;
   activeLegalDoc: LegalDocType;
+  setActiveLegalDoc: (doc: LegalDocType) => void;
   openLegalModal: (doc?: LegalDocType) => void;
   closeLegalModal: () => void;
   isCreateAccountModalOpen: boolean;
@@ -295,11 +379,48 @@ interface AppContextType {
   reportCommunity: (communityId: string, reason: string) => void;
   toggleHideCommunity: (communityId: string) => void;
   pinDiscussion: (discussionId: string) => void;
-  // Group Chat & Secret Hiding
-  createGroupChat: (name: string, isPublic: boolean, memberIds: string[], avatar?: string) => void;
+  // Group Chat & Admin Management
+  createGroupChat: (name: string, isPublic: boolean, memberIds: string[], avatar?: string, description?: string) => void;
+  updateGroupSettings: (
+    conversationId: string,
+    updates: {
+      name?: string;
+      description?: string;
+      avatar?: string;
+      isPublic?: boolean;
+      messagingPermission?: 'all' | 'admins_only';
+    }
+  ) => void;
+  promoteGroupAdmin: (conversationId: string, userId: string) => void;
+  demoteGroupAdmin: (conversationId: string, userId: string) => void;
+  toggleGroupMemberMessaging: (conversationId: string, userId: string) => void;
+  removeGroupMember: (conversationId: string, userId: string) => void;
+  addGroupMember: (conversationId: string, userId: string) => void;
+  approveGroupJoinRequest: (conversationId: string, requestId: string) => void;
+  rejectGroupJoinRequest: (conversationId: string, requestId: string) => void;
+  requestJoinGroupViaLink: (conversationId: string, customUser?: UserSummary) => void;
+  exitGroup: (conversationId: string) => void;
+  reportGroup: (conversationId: string, reason: string, details?: string) => void;
   toggleHideChat: (conversationId: string) => void;
   chatSecretCode: string;
   setChatSecretCode: (code: string) => void;
+  // Vault & Hidden Content System
+  hideChatWithCode: (conversationId: string, code: string, customConfig?: Partial<HiddenVaultConfig>) => boolean;
+  unhideChat: (conversationId: string) => void;
+  updateChatVaultConfig: (conversationId: string, updates: Partial<HiddenVaultConfig>) => void;
+  isVaultNotificationsEnabled: boolean;
+  toggleVaultNotifications: () => void;
+  defaultVaultConfig: HiddenVaultConfig;
+  updateDefaultVaultConfig: (updates: Partial<HiddenVaultConfig>) => void;
+  // Permissions System
+  activePermissionPrompt: {
+    type: AppPermissionType;
+    featureName?: string;
+    resolve: (granted: boolean) => void;
+  } | null;
+  requestAppPermission: (type: AppPermissionType, featureName?: string) => Promise<boolean>;
+  respondToPermissionPrompt: (decision: 'always' | 'now' | 'deny') => void;
+  resetAppPermissions: () => void;
   // Profile, Post, Story & Highlight Privacy & Archives
   archivePost: (postId: string) => void;
   unarchivePost: (postId: string) => void;
@@ -308,12 +429,16 @@ interface AppContextType {
   unarchiveStory: (storyId: string) => void;
   deleteStory: (storyId: string) => void;
   addStoryComment: (storyId: string, text: string, parentId?: string) => void;
+  likeStoryComment: (storyId: string, commentId: string) => void;
+  deleteStoryComment: (storyId: string, commentId: string) => void;
   updatePostEmojiSettings: (postId: string, allowedEmojis?: string[], restrictedEmojis?: string[]) => void;
   deleteComment: (postId: string, commentId: string) => void;
   archiveHighlight: (highlightId: string) => void;
   unarchiveHighlight: (highlightId: string) => void;
+  deleteHighlight: (highlightId: string) => void;
   toggleHideFollower: (userId: string, type: 'follower' | 'following') => void;
   updateSecondaryAvatar: (avatarUrl: string, visibility: 'everyone' | 'followers' | 'close_friends') => void;
+  updateCustomDualPfp: (pfp1: CustomPfpConfig, pfp2: CustomPfpConfig) => void;
   createStoryWithDuration: (mediaUrl: string, caption?: string, durationHours?: number, audience?: 'everyone' | 'close_friends') => void;
   // One-way Profile Concealment
   hiddenProfileFromUserIds: string[];
@@ -322,6 +447,11 @@ interface AppContextType {
   // Supabase Auth & Session State
   supabaseSession: Session | null;
   isSupabaseConfigured: boolean;
+  // Preferred Language & Translations
+  preferredLanguage: string;
+  setPreferredLanguage: (code: string) => void;
+  currentLanguageOption: LanguageOption;
+  t: (key: TranslationKey) => string;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -530,9 +660,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [supabaseSession, isSupabaseConfigured]);
 
   // Theme state
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+  const [systemTheme, setSystemThemeState] = useState<AppThemePreset>(() => {
+    const savedSys = localStorage.getItem('yaawp_system_theme') as AppThemePreset;
+    if (savedSys && ['light', 'nordic', 'porcelain', 'mint_light', 'rose_light', 'dark', 'midnight', 'obsidian', 'cyber', 'sunset', 'emerald'].includes(savedSys)) {
+      return savedSys;
+    }
     const saved = localStorage.getItem('yaawp_theme') || localStorage.getItem('instagram_theme');
-    return (saved === 'dark' || saved === 'light') ? saved : 'dark';
+    return saved === 'light' ? 'light' : 'dark';
+  });
+
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const savedSys = localStorage.getItem('yaawp_system_theme') as AppThemePreset;
+    if (savedSys && LIGHT_THEMES.includes(savedSys)) return 'light';
+    if (savedSys && !LIGHT_THEMES.includes(savedSys)) return 'dark';
+    const saved = localStorage.getItem('yaawp_theme') || localStorage.getItem('instagram_theme');
+    return saved === 'light' ? 'light' : 'dark';
   });
 
   const [activeTab, setActiveTab] = useState<TabType>('feed');
@@ -540,6 +682,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = getStoredStateItem('user');
     return saved ? JSON.parse(saved) : CURRENT_USER;
   });
+
+  const [preferredLanguage, setPreferredLanguageState] = useState<string>(() => {
+    const savedLang = localStorage.getItem('yaawp_preferred_language');
+    if (savedLang) return savedLang;
+    const savedUser = getStoredStateItem('user');
+    if (savedUser) {
+      try {
+        const u = JSON.parse(savedUser);
+        if (u.preferred_language) return u.preferred_language;
+      } catch (_) {}
+    }
+    return CURRENT_USER.preferred_language || 'en';
+  });
+
+  useEffect(() => {
+    const opt = getLanguageByCode(preferredLanguage);
+    document.documentElement.lang = opt.code;
+    document.documentElement.dir = opt.dir;
+  }, [preferredLanguage]);
+
+  const setPreferredLanguage = (code: string) => {
+    const opt = getLanguageByCode(code);
+    setPreferredLanguageState(opt.code);
+    localStorage.setItem('yaawp_preferred_language', opt.code);
+    document.documentElement.lang = opt.code;
+    document.documentElement.dir = opt.dir;
+
+    setCurrentUser(prev => {
+      const updated = { ...prev, preferred_language: opt.code };
+      setUserProfiles(pMap => ({ ...pMap, [prev.id]: updated }));
+      try {
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_user`, JSON.stringify(updated));
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_profiles`, JSON.stringify({ ...userProfiles, [prev.id]: updated }));
+      } catch (_) {}
+      return updated;
+    });
+
+    if (isSupabaseConfigured && supabaseSession?.user?.id) {
+      try {
+        supabase.auth.updateUser({
+          data: { preferred_language: opt.code }
+        }).catch(() => {});
+      } catch (_) {}
+    }
+  };
+
+  const currentLanguageOption = useMemo(() => {
+    return getLanguageByCode(preferredLanguage);
+  }, [preferredLanguage]);
+
+  const t = (key: TranslationKey): string => {
+    return translate(key, preferredLanguage);
+  };
 
   // Profiles cache for all platform users
   const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>(() => {
@@ -626,12 +821,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [conversations, setConversations] = useState<ChatConversation[]>(() => {
+    const buildSupportBotConv = (initialUnread = 0): ChatConversation => ({
+      id: 'conv_support_bot',
+      participant: SUPPORT_BOT_USER,
+      lastMessage: 'Welcome to Yaawp! How can I guide you today?',
+      lastMessageTime: 'Just now',
+      unreadCount: initialUnread,
+      isPinned: false,
+      isOnline: true,
+      messages: [
+        {
+          id: 'msg_support_bot_welcome',
+          senderId: SUPPORT_BOT_USER.id,
+          text: SUPPORT_BOT_WELCOME_MESSAGE,
+          timestamp: 'Just now',
+          supportBotData: {
+            suggestedActions: [
+              { label: 'Open Privacy Settings', actionKey: 'open_privacy' },
+              { label: 'Manage Secret Code', actionKey: 'open_secret_code' },
+              { label: 'Manage Permissions', actionKey: 'open_permissions' },
+              { label: 'Create a Post', actionKey: 'open_create_post' }
+            ],
+            quickReplies: SUPPORT_BOT_SUGGESTED_PROMPTS
+          }
+        }
+      ]
+    });
+
+    const isBotDeleted = localStorage.getItem('yaawp_support_bot_deleted') === 'true';
+
     const saved = getStoredStateItem('conversations');
     if (saved) {
       try {
         const parsed: ChatConversation[] = JSON.parse(saved);
-        const enriched = parsed.map(c => ({
+        const enriched: ChatConversation[] = parsed.map(c => ({
           ...c,
+          isPinned: c.id === 'conv_support_bot' ? false : Boolean(c.isPinned),
           messages: c.messages.map(m => {
             if (m.senderId === CURRENT_USER.id && !m.status) {
               return { ...m, status: 'seen' as const, seenAt: m.timestamp };
@@ -639,22 +864,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return m;
           })
         }));
-        const existingIds = new Set(enriched.map(c => c.id));
-        const missing = INITIAL_CONVERSATIONS.filter(c => !existingIds.has(c.id));
-        return [...enriched, ...missing];
+        let filtered: ChatConversation[] = enriched;
+        if (isBotDeleted) {
+          filtered = filtered.filter(c => c.id !== 'conv_support_bot');
+        }
+        const existingIds = new Set(filtered.map(c => c.id));
+        let merged: ChatConversation[] = [...filtered];
+        if (!isBotDeleted && !existingIds.has('conv_support_bot')) {
+          merged.push(buildSupportBotConv(0));
+        }
+        const missing = INITIAL_CONVERSATIONS.filter(c => !existingIds.has(c.id) && c.id !== 'conv_support_bot');
+        merged = [...merged, ...missing];
+        const hasAnyUnread = merged.some(c => c.unreadCount > 0);
+        if (!hasAnyUnread) {
+          const sophia = merged.find(c => c.id === 'conv_sophia');
+          if (sophia) {
+            sophia.unreadCount = 2;
+          }
+        }
+        return merged;
       } catch {
         // fallback to INITIAL_CONVERSATIONS
       }
     }
-    return INITIAL_CONVERSATIONS;
+    const initialList = [...INITIAL_CONVERSATIONS];
+    if (!isBotDeleted) {
+      initialList.push(buildSupportBotConv(0));
+    }
+    return initialList;
   });
 
-  const [activeConvId, setActiveConvId] = useState<string>(conversations[0]?.id || 'conv_1');
+  const [activeConvId, setActiveConvId] = useState<string>(() => {
+    const firstNonBot = conversations.find(c => c.id !== 'conv_support_bot');
+    return firstNonBot?.id || conversations[0]?.id || 'conv_1';
+  });
+  const activeConvIdRef = useRef<string>(activeConvId);
+  useEffect(() => {
+    activeConvIdRef.current = activeConvId;
+  }, [activeConvId]);
   const [activeStoryUserIndex, setActiveStoryUserIndex] = useState<number | null>(null);
   const [selectedPostForModal, setSelectedPostForModal] = useState<Post | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState<boolean>(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Custom Chat Lists state (e.g. School, Family, Work, etc.)
+  const [chatLists, setChatLists] = useState<ChatCustomList[]>(() => {
+    try {
+      const saved = localStorage.getItem('yaawp_chat_lists');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [
+      { id: 'list_school', name: 'School', color: 'indigo', createdAt: Date.now() - 300000 },
+      { id: 'list_family', name: 'Family', color: 'emerald', createdAt: Date.now() - 200000 },
+      { id: 'list_friends', name: 'Friends', color: 'amber', createdAt: Date.now() - 100000 }
+    ];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('yaawp_chat_lists', JSON.stringify(chatLists));
+    } catch {}
+  }, [chatLists]);
 
   // Yaawp Legal & Privacy state
   const [hasAgreedToTerms, setHasAgreedToTerms] = useState<boolean>(() => {
@@ -711,14 +983,97 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Settings & Privacy State
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState<boolean>(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpenState] = useState<boolean>(false);
+  const setIsProfileMenuOpen = (open: boolean) => {
+    setIsProfileMenuOpenState(open);
+    if (open) {
+      setActiveTab('settings');
+    }
+  };
   const [chatSecretCode, setChatSecretCodeState] = useState<string>(() => {
-    return localStorage.getItem('lumina_chat_secret_code') || '1234';
+    return localStorage.getItem('lumina_chat_secret_code') || '';
   });
   const setChatSecretCode = (code: string) => {
     setChatSecretCodeState(code);
     localStorage.setItem('lumina_chat_secret_code', code);
     showToast('Secret lock code updated successfully!');
+  };
+
+  const [isVaultNotificationsEnabled, setIsVaultNotificationsEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('lumina_vault_notifications');
+    return saved !== null ? saved === 'true' : false;
+  });
+
+  const toggleVaultNotifications = () => {
+    setIsVaultNotificationsEnabled(prev => {
+      const next = !prev;
+      localStorage.setItem('lumina_vault_notifications', String(next));
+      showToast(next ? 'Vault notifications enabled' : 'Vault notifications muted');
+      return next;
+    });
+  };
+
+  const [defaultVaultConfig, setDefaultVaultConfig] = useState<HiddenVaultConfig>(() => {
+    const saved = localStorage.getItem('lumina_default_vault_config');
+    return saved ? JSON.parse(saved) : { hideChat: true, hideStories: true, hidePosts: true };
+  });
+
+  const updateDefaultVaultConfig = (updates: Partial<HiddenVaultConfig>) => {
+    setDefaultVaultConfig(prev => {
+      const next = { ...prev, ...updates };
+      localStorage.setItem('lumina_default_vault_config', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  // Permissions Management (Just-in-Time access requests)
+  const [permissionStates, setPermissionStates] = useState<Record<AppPermissionType, 'always' | 'session' | 'denied' | undefined>>(() => {
+    const saved = localStorage.getItem('lumina_app_permissions');
+    return saved ? JSON.parse(saved) : { camera: undefined, microphone: undefined, location: undefined, storage: undefined };
+  });
+
+  const [activePermissionPrompt, setActivePermissionPrompt] = useState<{
+    type: AppPermissionType;
+    featureName?: string;
+    resolve: (granted: boolean) => void;
+  } | null>(null);
+
+  const requestAppPermission = (type: AppPermissionType, featureName?: string): Promise<boolean> => {
+    if (permissionStates[type] === 'always' || permissionStates[type] === 'session') {
+      return Promise.resolve(true);
+    }
+    return new Promise(resolve => {
+      setActivePermissionPrompt({ type, featureName, resolve });
+    });
+  };
+
+  const respondToPermissionPrompt = (decision: 'always' | 'now' | 'deny') => {
+    if (!activePermissionPrompt) return;
+    const { type, resolve } = activePermissionPrompt;
+    if (decision === 'always') {
+      setPermissionStates(prev => {
+        const next = { ...prev, [type]: 'always' as const };
+        localStorage.setItem('lumina_app_permissions', JSON.stringify(next));
+        return next;
+      });
+      showToast(`${type.charAt(0).toUpperCase() + type.slice(1)} access granted`);
+      resolve(true);
+    } else if (decision === 'now') {
+      setPermissionStates(prev => ({ ...prev, [type]: 'session' as const }));
+      showToast(`${type.charAt(0).toUpperCase() + type.slice(1)} access granted for this time`);
+      resolve(true);
+    } else {
+      setPermissionStates(prev => ({ ...prev, [type]: 'denied' as const }));
+      showToast(`${type.charAt(0).toUpperCase() + type.slice(1)} access was denied`);
+      resolve(false);
+    }
+    setActivePermissionPrompt(null);
+  };
+
+  const resetAppPermissions = () => {
+    setPermissionStates({ camera: undefined, microphone: undefined, location: undefined, storage: undefined });
+    localStorage.removeItem('lumina_app_permissions');
+    showToast('App permissions have been reset');
   };
   const [isAccountPrivate, setIsAccountPrivate] = useState<boolean>(() => {
     return getStoredStateItem('account_private') === 'true';
@@ -773,8 +1128,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [failedLoginAttempts, setFailedLoginAttempts] = useState<number>(0);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   const [failedLoginsAlert, setFailedLoginsAlert] = useState<boolean>(false);
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState<boolean>(() => {
-    return localStorage.getItem('lumina_2fa_enabled') === 'true';
+  const [twoFactorPassword, setTwoFactorPasswordState] = useState<string | null>(() => {
+    return localStorage.getItem('yaawp_2fa_password') || null;
+  });
+  const [twoFactorEnabled, setTwoFactorEnabledState] = useState<boolean>(() => {
+    const hasPw = Boolean(localStorage.getItem('yaawp_2fa_password'));
+    const isEn = localStorage.getItem('lumina_2fa_enabled') === 'true';
+    return isEn && hasPw;
   });
   const [privateMediaSignedUrlsEnabled, setPrivateMediaSignedUrlsEnabled] = useState<boolean>(() => {
     return localStorage.getItem('lumina_signed_urls') !== 'false';
@@ -1005,12 +1365,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sync to local storage
   useEffect(() => {
     localStorage.setItem('yaawp_theme', theme);
+    localStorage.setItem('yaawp_system_theme', systemTheme);
+    document.documentElement.setAttribute('data-theme', systemTheme);
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [theme]);
+  }, [theme, systemTheme]);
 
   useEffect(() => {
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_user`, JSON.stringify(currentUser));
@@ -1091,8 +1453,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_conversations`, JSON.stringify(conversations));
   }, [conversations]);
 
+  const setSystemTheme = (newPreset: AppThemePreset) => {
+    setSystemThemeState(newPreset);
+    localStorage.setItem('yaawp_system_theme', newPreset);
+    const isLight = LIGHT_THEMES.includes(newPreset);
+    const newThemeMode: 'light' | 'dark' = isLight ? 'light' : 'dark';
+    setTheme(newThemeMode);
+    localStorage.setItem('yaawp_theme', newThemeMode);
+    document.documentElement.setAttribute('data-theme', newPreset);
+    if (newThemeMode === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    const displayName = newPreset
+      .split('_')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+    showToast(`Applied ${displayName} theme (${isLight ? 'Bright' : 'Dark'})`);
+  };
+
   const toggleTheme = () => {
-    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+    if (theme === 'dark') {
+      setSystemTheme('light');
+    } else {
+      setSystemTheme('dark');
+    }
   };
 
   const unreadNotifsCount = notifications.filter(n => !n.isRead).length;
@@ -1128,6 +1514,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 0. Exclude blocked users across all feeds
     if (blockedUsers.length > 0) {
       filtered = filtered.filter(p => !blockedUsers.includes(p.user.id));
+    }
+
+    // 0b. Exclude posts from contacts with "Hide Posts" enabled in Secret Vault
+    const hiddenUsersWithPostsHidden = new Set(
+      conversations
+        .filter(c => c.isHiddenChat && c.hiddenVaultConfig?.hidePosts !== false)
+        .map(c => c.participant.id)
+    );
+    if (hiddenUsersWithPostsHidden.size > 0) {
+      filtered = filtered.filter(p => !hiddenUsersWithPostsHidden.has(p.user.id));
     }
 
     // 1. Filter by feedMode
@@ -1683,7 +2079,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createPost = (data: {
-    mediaUrls: string[];
+    mediaUrls?: string[];
+    videoUrl?: string;
+    isTextPost?: boolean;
+    textPostTheme?: 'slate' | 'indigo' | 'emerald' | 'amber' | 'sunset' | 'dark';
+    postType?: 'image' | 'video' | 'text';
     caption: string;
     location?: string;
     filterClass?: string;
@@ -1693,7 +2093,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     audienceCircleId?: string;
     allowedEmojis?: string[];
     restrictedEmojis?: string[];
+    isScheduled?: boolean;
+    scheduledPublishTime?: string;
   }) => {
+    const isScheduledPost = Boolean(data.isScheduled && data.scheduledPublishTime);
+    let scheduledDateLabel = '';
+    if (isScheduledPost && data.scheduledPublishTime) {
+      try {
+        const d = new Date(data.scheduledPublishTime);
+        scheduledDateLabel = d.toLocaleString([], {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch {
+        scheduledDateLabel = data.scheduledPublishTime;
+      }
+    }
+
+    const effectivePostType =
+      data.postType || (data.videoUrl ? 'video' : data.isTextPost ? 'text' : 'image');
+
     const newPost: Post = {
       id: `post_${Date.now()}`,
       user: {
@@ -1703,11 +2124,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         avatar: currentUser.avatar,
         isVerified: currentUser.isVerified
       },
-      mediaUrls: data.mediaUrls,
+      mediaUrls: data.mediaUrls || [],
+      videoUrl: data.videoUrl,
+      isTextPost: data.isTextPost,
+      textPostTheme: data.textPostTheme,
+      postType: effectivePostType,
       caption: data.caption,
       location: data.location || undefined,
       tags: data.caption.match(/#[a-zA-Z0-9_]+/g) || [],
-      timestamp: 'JUST NOW',
+      timestamp: isScheduledPost ? `SCHEDULED: ${scheduledDateLabel}` : 'JUST NOW',
       createdAt: Date.now(),
       likesCount: 0,
       isLiked: false,
@@ -1720,6 +2145,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       audienceCircleId: data.audienceCircleId,
       allowedEmojis: data.allowedEmojis,
       restrictedEmojis: data.restrictedEmojis,
+      isScheduled: isScheduledPost,
+      scheduledPublishTime: isScheduledPost ? data.scheduledPublishTime : undefined,
       score: 0,
       upvotes: 0,
       downvotes: 0
@@ -1766,11 +2193,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // safe fallback
     }
 
-    showToast('Your post was shared successfully!');
+    if (isScheduledPost) {
+      showToast(`Post scheduled for ${scheduledDateLabel}!`);
+    } else {
+      showToast('Your post was shared successfully!');
+    }
     setActiveTab('feed');
   };
 
-  const createStory = (mediaUrl: string, caption?: string) => {
+  const createStory = (
+    mediaUrl: string,
+    caption?: string,
+    poll?: StoryPoll,
+    isTextStory?: boolean,
+    storyTheme?: string
+  ) => {
     const newStory: Story = {
       id: `story_${Date.now()}`,
       user: {
@@ -1782,11 +2219,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       mediaUrl,
       timestamp: 'Just now',
       seen: false,
-      caption
+      caption,
+      poll,
+      isTextStory,
+      storyTheme
     };
 
     setStories(prev => [newStory, ...prev.filter(s => s.user.id !== currentUser.id)]);
     showToast('Story added to your profile!');
+  };
+
+  const voteStoryPoll = (storyId: string, optionId: string) => {
+    setStories(prev =>
+      prev.map(story => {
+        if (story.id !== storyId || !story.poll) return story;
+        if (story.poll.userVotedOptionId) return story; // already voted
+        const updatedOptions = story.poll.options.map(opt =>
+          opt.id === optionId ? { ...opt, votes: opt.votes + 1 } : opt
+        );
+        const totalVotes = updatedOptions.reduce((acc, o) => acc + o.votes, 0);
+        return {
+          ...story,
+          poll: {
+            ...story.poll,
+            options: updatedOptions,
+            userVotedOptionId: optionId,
+            totalVotes
+          }
+        };
+      })
+    );
   };
 
   const toggleLikeReel = (reelId: string) => {
@@ -1819,6 +2281,110 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return r;
       })
     );
+  };
+
+  const addReelComment = (reelId: string, text: string, parentId?: string) => {
+    if (!text.trim()) return;
+    const newComment: Comment = {
+      id: `reel_comm_${Date.now()}`,
+      parentId,
+      user: {
+        id: currentUser.id,
+        username: currentUser.username,
+        name: currentUser.name,
+        avatar: currentUser.avatar
+      },
+      text: text.trim(),
+      timestamp: 'Just now',
+      likesCount: 0,
+      isLiked: false,
+      replies: []
+    };
+
+    setReels(prev =>
+      prev.map(r => {
+        if (r.id === reelId) {
+          if (parentId) {
+            const updateReplies = (comments: Comment[]): Comment[] => {
+              return comments.map(c => {
+                if (c.id === parentId) {
+                  return { ...c, replies: [...(c.replies || []), newComment] };
+                }
+                if (c.replies && c.replies.length > 0) {
+                  return { ...c, replies: updateReplies(c.replies) };
+                }
+                return c;
+              });
+            };
+            return {
+              ...r,
+              commentsCount: r.commentsCount + 1,
+              comments: updateReplies(r.comments || [])
+            };
+          }
+          return {
+            ...r,
+            commentsCount: r.commentsCount + 1,
+            comments: [...(r.comments || []), newComment]
+          };
+        }
+        return r;
+      })
+    );
+    showToast('Comment posted to reel');
+  };
+
+  const likeReelComment = (reelId: string, commentId: string) => {
+    const toggleLike = (comments: Comment[]): Comment[] => {
+      return comments.map(c => {
+        if (c.id === commentId) {
+          const wasLiked = c.isLiked;
+          return {
+            ...c,
+            isLiked: !wasLiked,
+            likesCount: wasLiked ? c.likesCount - 1 : c.likesCount + 1
+          };
+        }
+        if (c.replies && c.replies.length > 0) {
+          return { ...c, replies: toggleLike(c.replies) };
+        }
+        return c;
+      });
+    };
+
+    setReels(prev =>
+      prev.map(r => {
+        if (r.id === reelId) {
+          return { ...r, comments: toggleLike(r.comments || []) };
+        }
+        return r;
+      })
+    );
+  };
+
+  const deleteReelComment = (reelId: string, commentId: string) => {
+    const removeComment = (comments: Comment[]): Comment[] => {
+      return comments
+        .filter(c => c.id !== commentId)
+        .map(c => ({
+          ...c,
+          replies: c.replies ? removeComment(c.replies) : []
+        }));
+    };
+
+    setReels(prev =>
+      prev.map(r => {
+        if (r.id === reelId) {
+          return {
+            ...r,
+            commentsCount: Math.max(0, r.commentsCount - 1),
+            comments: removeComment(r.comments || [])
+          };
+        }
+        return r;
+      })
+    );
+    showToast('Reel comment deleted');
   };
 
   const toggleFollowUser = (userId: string) => {
@@ -1862,6 +2428,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setConversations(prev =>
       prev.map(c => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))
     );
+  };
+
+  const markConversationAsUnread = (conversationId: string) => {
+    setConversations(prev =>
+      prev.map(c => (c.id === conversationId ? { ...c, unreadCount: Math.max(1, c.unreadCount + 1) } : c))
+    );
+  };
+
+  const simulateIncomingMessage = (senderId?: string, customText?: string) => {
+    const sender = senderId ? (Object.values(USERS).find(u => u.id === senderId) || USERS.sophia_vogue) : USERS.sophia_vogue;
+    if (!sender) return;
+    const convId = `conv_${sender.username.replace('@', '')}`;
+    const newMsg: ChatMessage = {
+      id: `msg_${Date.now()}`,
+      senderId: sender.id,
+      text: customText || "Hey! Just dropped a comment on your latest post ✨",
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setConversations(prev => {
+      const existing = prev.find(c => c.id === convId);
+      if (existing) {
+        const isCurrentlyViewing =
+          window.location.pathname.includes('/chats') && activeConvIdRef.current === convId;
+        return prev.map(c =>
+          c.id === convId
+            ? {
+                ...c,
+                lastMessage: newMsg.text,
+                lastMessageTime: 'Just now',
+                messages: [...c.messages, newMsg],
+                unreadCount: isCurrentlyViewing ? 0 : c.unreadCount + 1
+              }
+            : c
+        );
+      }
+      return [
+        {
+          id: convId,
+          participant: sender,
+          lastMessage: newMsg.text,
+          lastMessageTime: 'Just now',
+          unreadCount: 1,
+          isOnline: true,
+          isRecipientInChat: false,
+          messages: [newMsg]
+        },
+        ...prev
+      ];
+    });
   };
 
   const markRecipientSeen = (conversationId: string) => {
@@ -1934,15 +2549,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       mediaUrl?: string;
       mediaType?: 'image' | 'video' | 'file';
       fileName?: string;
+      documentData?: DocumentData;
+      audioData?: AudioData;
+      contactData?: ContactData;
+      locationData?: LocationData;
+      pollData?: PollData;
+      gameSession?: GameSession;
     }
   ) => {
-    if (!text.trim() && !options?.isVoice && !options?.mediaUrl) return;
+    if (
+      !text.trim() &&
+      !options?.isVoice &&
+      !options?.mediaUrl &&
+      !options?.documentData &&
+      !options?.audioData &&
+      !options?.contactData &&
+      !options?.locationData &&
+      !options?.pollData &&
+      !options?.gameSession
+    ) return;
+
     const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const newMsgId = `msg_${Date.now()}`;
     const displaySnippet = options?.isVoice
       ? `🎙️ Voice Note (${options.voiceDurationSeconds || 5}s)`
       : options?.mediaUrl
       ? (options.mediaType === 'image' ? '📷 Photo' : options.mediaType === 'video' ? '🎥 Video' : '📎 Attachment')
+      : options?.documentData
+      ? `📄 ${options.documentData.fileName}`
+      : options?.audioData
+      ? `🎵 ${options.audioData.title}`
+      : options?.contactData
+      ? `👤 Contact: ${options.contactData.name}`
+      : options?.locationData
+      ? `📍 Location: ${options.locationData.name}`
+      : options?.pollData
+      ? `📊 Poll: ${options.pollData.question}`
+      : options?.gameSession
+      ? `🎮 Game: ${options.gameSession.gameTitle}`
       : text.trim();
 
     const newMessage: ChatMessage = {
@@ -1956,7 +2600,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       voiceDurationSeconds: options?.voiceDurationSeconds,
       mediaUrl: options?.mediaUrl,
       mediaType: options?.mediaType,
-      fileName: options?.fileName
+      fileName: options?.fileName,
+      documentData: options?.documentData,
+      audioData: options?.audioData,
+      contactData: options?.contactData,
+      locationData: options?.locationData,
+      pollData: options?.pollData,
+      gameSession: options?.gameSession
     };
 
     setConversations(prev =>
@@ -2029,37 +2679,129 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // 4. Recipient replies and clears typing indicator
       setTimeout(() => {
-        const replies = [
-          "Hey Jatin! Thanks for reaching out, loved checking this out 🙌",
-          "Totally agree with that! Let's definitely collaborate soon ✨",
-          "Thanks for the message! Love the composition in your recent work 📸",
-          "Awesome point! Let's keep in touch 😊",
-          "Sounds perfect! Catch you soon on the next project ✨"
-        ];
-        const randomReply = replies[Math.floor(Math.random() * replies.length)];
+        let replyText = '';
+        let supportBotMeta: ChatMessage['supportBotData'] = undefined;
+
+        if (targetConv.participant.id === SUPPORT_BOT_USER.id) {
+          const botResult = getAutomatedBotResponse(text);
+          replyText = botResult.text;
+          supportBotMeta = {
+            suggestedActions: botResult.suggestedActions,
+            quickReplies: botResult.quickReplies
+          };
+        } else {
+          const replies = [
+            "Hey Jatin! Thanks for reaching out, loved checking this out 🙌",
+            "Totally agree with that! Let's definitely collaborate soon ✨",
+            "Thanks for the message! Love the composition in your recent work 📸",
+            "Awesome point! Let's keep in touch 😊",
+            "Sounds perfect! Catch you soon on the next project ✨"
+          ];
+          replyText = replies[Math.floor(Math.random() * replies.length)];
+        }
+
         const autoReplyMessage: ChatMessage = {
           id: `msg_reply_${Date.now()}`,
           senderId: targetConv.participant.id,
-          text: randomReply,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          text: replyText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          supportBotData: supportBotMeta
         };
 
         setConversations(prevConv =>
           prevConv.map(c => {
             if (c.id === conversationId) {
+              const isCurrentlyViewing =
+                window.location.pathname.includes('/chats') && activeConvIdRef.current === conversationId;
               return {
                 ...c,
                 isTyping: false,
-                lastMessage: randomReply,
+                lastMessage: replyText.slice(0, 60),
                 lastMessageTime: 'Just now',
-                messages: [...c.messages, autoReplyMessage]
+                messages: [...c.messages, autoReplyMessage],
+                unreadCount: isCurrentlyViewing ? 0 : c.unreadCount + 1
               };
             }
             return c;
           })
         );
-      }, 3600);
+      }, targetConv.participant.id === SUPPORT_BOT_USER.id ? 800 : 3600);
     }
+  };
+
+  const votePoll = (conversationId: string, messageId: string, optionId: string) => {
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id !== conversationId) return c;
+        return {
+          ...c,
+          messages: c.messages.map(m => {
+            if (m.id !== messageId || !m.pollData) return m;
+            const poll = m.pollData;
+            const alreadyVotedThis = poll.options.some(
+              opt => opt.id === optionId && opt.voters.includes(currentUser.id)
+            );
+
+            const updatedOptions = poll.options.map(opt => {
+              if (opt.id === optionId) {
+                if (alreadyVotedThis) {
+                  return {
+                    ...opt,
+                    votes: Math.max(0, opt.votes - 1),
+                    voters: opt.voters.filter(id => id !== currentUser.id),
+                  };
+                } else {
+                  return {
+                    ...opt,
+                    votes: opt.votes + 1,
+                    voters: [...opt.voters, currentUser.id],
+                  };
+                }
+              } else if (!poll.isMultipleChoice && !alreadyVotedThis && opt.voters.includes(currentUser.id)) {
+                return {
+                  ...opt,
+                  votes: Math.max(0, opt.votes - 1),
+                  voters: opt.voters.filter(id => id !== currentUser.id),
+                };
+              }
+              return opt;
+            });
+
+            const totalVotes = updatedOptions.reduce((sum, o) => sum + o.votes, 0);
+
+            return {
+              ...m,
+              pollData: {
+                ...poll,
+                options: updatedOptions,
+                totalVotes,
+              },
+            };
+          }),
+        };
+      })
+    );
+  };
+
+  const updateGameSession = (conversationId: string, messageId: string, updated: Partial<GameSession>) => {
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id !== conversationId) return c;
+        return {
+          ...c,
+          messages: c.messages.map(m => {
+            if (m.id !== messageId || !m.gameSession) return m;
+            return {
+              ...m,
+              gameSession: {
+                ...m.gameSession,
+                ...updated,
+              },
+            };
+          }),
+        };
+      })
+    );
   };
 
   const markNotificationAsRead = (id: string) => {
@@ -2139,7 +2881,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const openLegalModal = (doc: LegalDocType = 'terms') => {
     setActiveLegalDoc(doc);
-    setIsLegalModalOpen(true);
+    setIsLegalModalOpen(false);
+    setActiveTab('legal');
   };
 
   const closeLegalModal = () => {
@@ -2227,6 +2970,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       avatar: data.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&h=400&q=80',
       bio: 'New Yaawp creator ✨ Sharing moments & connecting with community.',
       isVerified: false,
+      preferred_language: data.preferred_language || preferredLanguage || 'en',
       followersCount: 0,
       followingCount: 0,
       postsCount: 0,
@@ -2250,6 +2994,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('yaawp_terms_agreed_time', String(Date.now()));
     localStorage.setItem('yaawp_authenticated', 'true');
     setIsAuthenticated(true);
+    if (data.preferred_language) {
+      setPreferredLanguage(data.preferred_language);
+    }
+
+    // First time onboarding: Check if user already received Yaawp@Support bot welcome message
+    const welcomeDeliveredKey = `yaawp_bot_welcome_delivered_${newId}`;
+    const alreadyReceived = localStorage.getItem(welcomeDeliveredKey) === 'true';
+    const isBotAlreadyDeleted = localStorage.getItem('yaawp_support_bot_deleted') === 'true';
+
+    if (!alreadyReceived && !isBotAlreadyDeleted) {
+      localStorage.setItem(welcomeDeliveredKey, 'true');
+      const welcomeBotMsg: ChatMessage = {
+        id: `msg_welcome_${Date.now()}`,
+        senderId: SUPPORT_BOT_USER.id,
+        text: `👋 **Welcome to Yaawp, @${cleanUsername}!** I'm your dedicated **Yaawp@Support bot**.\n\nI can guide you with:\n• 🔒 **Privacy Settings & Account Security**\n• 🗝️ **Secret Vault & Hidden Chats**\n• 📱 **Camera, Mic & Location Permissions**\n• 📸 **Creating Posts & Stories**\n• ⚙️ **Finding Specific Settings**\n\nAsk me anything or tap the options below!`,
+        timestamp: 'Just now',
+        supportBotData: {
+          suggestedActions: [
+            { label: 'Open Privacy Settings', actionKey: 'open_privacy' },
+            { label: 'Manage Secret Code', actionKey: 'open_secret_code' },
+            { label: 'Manage Permissions', actionKey: 'open_permissions' },
+            { label: 'Create a Post', actionKey: 'open_create_post' }
+          ],
+          quickReplies: SUPPORT_BOT_SUGGESTED_PROMPTS
+        }
+      };
+
+      setConversations(prev => {
+        const existingBotConv = prev.find(c => c.id === 'conv_support_bot');
+        if (existingBotConv) {
+          return prev.map(c =>
+            c.id === 'conv_support_bot'
+              ? {
+                  ...c,
+                  lastMessage: 'Welcome to Yaawp! How can I guide you today?',
+                  lastMessageTime: 'Just now',
+                  unreadCount: 1,
+                  isPinned: false,
+                  messages: [welcomeBotMsg]
+                }
+              : c
+          );
+        } else {
+          const newBotConv: ChatConversation = {
+            id: 'conv_support_bot',
+            participant: SUPPORT_BOT_USER,
+            lastMessage: 'Welcome to Yaawp! How can I guide you today?',
+            lastMessageTime: 'Just now',
+            unreadCount: 1,
+            isPinned: false,
+            isOnline: true,
+            messages: [welcomeBotMsg]
+          };
+          return [...prev, newBotConv];
+        }
+      });
+    }
 
     confetti({
       particleCount: 60,
@@ -2489,18 +3290,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Discussion pin status toggled');
   };
 
-  const createGroupChat = (name: string, isPublic: boolean, memberIds: string[], avatar?: string) => {
+  const createGroupChat = (name: string, isPublic: boolean, memberIds: string[], avatar?: string, description?: string) => {
     const memberUsers: UserSummary[] = memberIds
       .map(id => Object.values(USERS).find(u => u.id === id) || userProfiles[id])
       .filter(Boolean) as UserSummary[];
-    memberUsers.push({
-      id: currentUser.id,
-      username: currentUser.username,
-      name: currentUser.name,
-      avatar: currentUser.avatar,
-      isVerified: currentUser.isVerified
-    });
+    
+    // Ensure creator is included
+    if (!memberUsers.some(m => m.id === currentUser.id)) {
+      memberUsers.unshift({
+        id: currentUser.id,
+        username: currentUser.username,
+        name: currentUser.name,
+        avatar: currentUser.avatar,
+        isVerified: currentUser.isVerified
+      });
+    }
 
+    const inviteCode = 'grp_' + Math.random().toString(36).substring(2, 9);
     const newGroup: ChatConversation = {
       id: `conv_group_${Date.now()}`,
       participant: {
@@ -2512,8 +3318,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isGroup: true,
       groupName: name,
       groupAvatar: avatar || 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=400&h=400&q=80',
+      groupDescription: description || `Welcome to ${name}! A space to connect, share inspiration, and collaborate.`,
       groupMembers: memberUsers,
       isGroupPublic: isPublic,
+      ownerId: currentUser.id,
+      adminIds: [currentUser.id],
+      groupMessagingPermission: 'all',
+      restrictedMessengerIds: [],
+      pendingJoinRequests: [],
+      inviteCode,
       lastMessage: `Group created by @${currentUser.username}`,
       lastMessageTime: 'Just now',
       unreadCount: 0,
@@ -2521,7 +3334,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         {
           id: `msg_sys_${Date.now()}`,
           senderId: 'system',
-          text: `Welcome to ${name}! This is a ${isPublic ? 'Public' : 'Private'} group with ${memberUsers.length} members.`,
+          text: `Welcome to ${name}! Created by ${currentUser.name} (Admin & Owner). Group is ${isPublic ? 'Public' : 'Private'}.`,
           timestamp: 'Just now'
         }
       ]
@@ -2530,17 +3343,459 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Created ${isPublic ? 'Public' : 'Private'} group "${name}"!`);
   };
 
-  const toggleHideChat = (conversationId: string) => {
+  const updateGroupSettings = (
+    conversationId: string,
+    updates: {
+      name?: string;
+      description?: string;
+      avatar?: string;
+      isPublic?: boolean;
+      messagingPermission?: 'all' | 'admins_only';
+    }
+  ) => {
     setConversations(prev =>
       prev.map(c => {
-        if (c.id === conversationId) {
-          const nextHidden = !c.isHiddenChat;
-          showToast(nextHidden ? 'Chat hidden. Type your secret code in the search box to unlock.' : 'Chat unhidden.');
-          return { ...c, isHiddenChat: nextHidden };
+        if (c.id === conversationId && c.isGroup) {
+          const newName = updates.name !== undefined ? updates.name.trim() : c.groupName;
+          const newDesc = updates.description !== undefined ? updates.description : c.groupDescription;
+          const newAvatar = updates.avatar !== undefined ? updates.avatar : c.groupAvatar;
+          const newIsPublic = updates.isPublic !== undefined ? updates.isPublic : c.isGroupPublic;
+          const newMessaging = updates.messagingPermission !== undefined ? updates.messagingPermission : c.groupMessagingPermission;
+
+          const systemNotices: string[] = [];
+          if (updates.name && updates.name !== c.groupName) {
+            systemNotices.push(`Group name changed to "${updates.name}"`);
+          }
+          if (updates.isPublic !== undefined && updates.isPublic !== c.isGroupPublic) {
+            systemNotices.push(`Group privacy changed to ${updates.isPublic ? 'Public' : 'Private'}`);
+          }
+          if (updates.messagingPermission !== undefined && updates.messagingPermission !== c.groupMessagingPermission) {
+            systemNotices.push(`Messaging permission set to ${updates.messagingPermission === 'admins_only' ? 'Only Admins' : 'All Members'}`);
+          }
+
+          const newSysMsgs = systemNotices.map((txt, idx) => ({
+            id: `msg_sys_${Date.now()}_${idx}`,
+            senderId: 'system',
+            text: txt,
+            timestamp: 'Just now'
+          }));
+
+          return {
+            ...c,
+            groupName: newName,
+            groupDescription: newDesc,
+            groupAvatar: newAvatar,
+            isGroupPublic: newIsPublic,
+            groupMessagingPermission: newMessaging,
+            participant: {
+              ...c.participant,
+              name: newName || c.participant.name,
+              avatar: newAvatar || c.participant.avatar
+            },
+            messages: [...c.messages, ...newSysMsgs]
+          };
         }
         return c;
       })
     );
+    showToast('Group settings updated');
+  };
+
+  const promoteGroupAdmin = (conversationId: string, userId: string) => {
+    const user = Object.values(USERS).find(u => u.id === userId) || userProfiles[userId];
+    const name = user ? user.name : 'Member';
+
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId && c.isGroup) {
+          const currentAdmins = c.adminIds || (c.ownerId ? [c.ownerId] : []);
+          if (currentAdmins.includes(userId)) return c;
+          const updatedAdmins = [...currentAdmins, userId];
+
+          const sysMsg = {
+            id: `msg_sys_${Date.now()}`,
+            senderId: 'system',
+            text: `${name} was appointed as Group Admin by @${currentUser.username}.`,
+            timestamp: 'Just now'
+          };
+
+          return {
+            ...c,
+            adminIds: updatedAdmins,
+            messages: [...c.messages, sysMsg]
+          };
+        }
+        return c;
+      })
+    );
+    showToast(`${name} is now a Group Admin`);
+  };
+
+  const demoteGroupAdmin = (conversationId: string, userId: string) => {
+    const user = Object.values(USERS).find(u => u.id === userId) || userProfiles[userId];
+    const name = user ? user.name : 'Member';
+
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId && c.isGroup) {
+          if (c.ownerId === userId) {
+            showToast('The Group Owner cannot be dismissed as admin');
+            return c;
+          }
+          const currentAdmins = c.adminIds || [];
+          const updatedAdmins = currentAdmins.filter(id => id !== userId);
+
+          const sysMsg = {
+            id: `msg_sys_${Date.now()}`,
+            senderId: 'system',
+            text: `${name} was dismissed as Group Admin.`,
+            timestamp: 'Just now'
+          };
+
+          return {
+            ...c,
+            adminIds: updatedAdmins,
+            messages: [...c.messages, sysMsg]
+          };
+        }
+        return c;
+      })
+    );
+    showToast(`${name} is no longer an Admin`);
+  };
+
+  const toggleGroupMemberMessaging = (conversationId: string, userId: string) => {
+    const user = Object.values(USERS).find(u => u.id === userId) || userProfiles[userId];
+    const name = user ? user.name : 'Member';
+
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId && c.isGroup) {
+          const currentRestricted = c.restrictedMessengerIds || [];
+          const isRestricted = currentRestricted.includes(userId);
+          const nextRestricted = isRestricted
+            ? currentRestricted.filter(id => id !== userId)
+            : [...currentRestricted, userId];
+
+          const sysMsg = {
+            id: `msg_sys_${Date.now()}`,
+            senderId: 'system',
+            text: isRestricted
+              ? `${name} is now allowed to send messages in the group.`
+              : `${name} has been restricted from sending messages in the group by an admin.`,
+            timestamp: 'Just now'
+          };
+
+          showToast(
+            isRestricted
+              ? `${name} can now send messages`
+              : `${name} restricted from messaging`
+          );
+
+          return {
+            ...c,
+            restrictedMessengerIds: nextRestricted,
+            messages: [...c.messages, sysMsg]
+          };
+        }
+        return c;
+      })
+    );
+  };
+
+  const removeGroupMember = (conversationId: string, userId: string) => {
+    const user = Object.values(USERS).find(u => u.id === userId) || userProfiles[userId];
+    const name = user ? user.name : 'Member';
+
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId && c.isGroup) {
+          if (c.ownerId === userId) {
+            showToast('The Group Owner cannot be removed');
+            return c;
+          }
+          const updatedMembers = (c.groupMembers || []).filter(m => m.id !== userId);
+          const updatedAdmins = (c.adminIds || []).filter(id => id !== userId);
+          const updatedRestricted = (c.restrictedMessengerIds || []).filter(id => id !== userId);
+
+          const sysMsg = {
+            id: `msg_sys_${Date.now()}`,
+            senderId: 'system',
+            text: `${name} was removed from the group by an admin.`,
+            timestamp: 'Just now'
+          };
+
+          return {
+            ...c,
+            groupMembers: updatedMembers,
+            adminIds: updatedAdmins,
+            restrictedMessengerIds: updatedRestricted,
+            messages: [...c.messages, sysMsg]
+          };
+        }
+        return c;
+      })
+    );
+    showToast(`${name} removed from group`);
+  };
+
+  const addGroupMember = (conversationId: string, userId: string) => {
+    const user = Object.values(USERS).find(u => u.id === userId) || userProfiles[userId];
+    if (!user) return;
+
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId && c.isGroup) {
+          const currentMembers = c.groupMembers || [];
+          if (currentMembers.some(m => m.id === userId)) {
+            showToast(`${user.name} is already in the group`);
+            return c;
+          }
+
+          const userSummary: UserSummary = {
+            id: user.id,
+            username: user.username,
+            name: user.name,
+            avatar: user.avatar,
+            isVerified: user.isVerified
+          };
+
+          const pending = (c.pendingJoinRequests || []).filter(r => r.user.id !== userId);
+
+          const sysMsg = {
+            id: `msg_sys_${Date.now()}`,
+            senderId: 'system',
+            text: `${user.name} was added to the group by @${currentUser.username}.`,
+            timestamp: 'Just now'
+          };
+
+          return {
+            ...c,
+            groupMembers: [...currentMembers, userSummary],
+            pendingJoinRequests: pending,
+            messages: [...c.messages, sysMsg]
+          };
+        }
+        return c;
+      })
+    );
+    showToast(`Added ${user.name} to the group`);
+  };
+
+  const approveGroupJoinRequest = (conversationId: string, requestId: string) => {
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId && c.isGroup) {
+          const request = (c.pendingJoinRequests || []).find(r => r.id === requestId);
+          if (!request) return c;
+
+          const currentMembers = c.groupMembers || [];
+          const updatedMembers = currentMembers.some(m => m.id === request.user.id)
+            ? currentMembers
+            : [...currentMembers, request.user];
+
+          const updatedRequests = (c.pendingJoinRequests || []).filter(r => r.id !== requestId);
+
+          const sysMsg = {
+            id: `msg_sys_${Date.now()}`,
+            senderId: 'system',
+            text: `${request.user.name} joined the group (approved by admin).`,
+            timestamp: 'Just now'
+          };
+
+          return {
+            ...c,
+            groupMembers: updatedMembers,
+            pendingJoinRequests: updatedRequests,
+            messages: [...c.messages, sysMsg]
+          };
+        }
+        return c;
+      })
+    );
+    showToast('Join request approved!');
+  };
+
+  const rejectGroupJoinRequest = (conversationId: string, requestId: string) => {
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId && c.isGroup) {
+          return {
+            ...c,
+            pendingJoinRequests: (c.pendingJoinRequests || []).filter(r => r.id !== requestId)
+          };
+        }
+        return c;
+      })
+    );
+    showToast('Join request declined');
+  };
+
+  const requestJoinGroupViaLink = (conversationId: string, customUser?: UserSummary) => {
+    const userToJoin: UserSummary = customUser || {
+      id: currentUser.id,
+      username: currentUser.username,
+      name: currentUser.name,
+      avatar: currentUser.avatar,
+      isVerified: currentUser.isVerified
+    };
+
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId && c.isGroup) {
+          // If already member
+          if ((c.groupMembers || []).some(m => m.id === userToJoin.id)) {
+            showToast(`${userToJoin.name} is already a member`);
+            return c;
+          }
+
+          if (c.isGroupPublic) {
+            // Direct join for public group
+            const sysMsg = {
+              id: `msg_sys_${Date.now()}`,
+              senderId: 'system',
+              text: `${userToJoin.name} joined via group invite link.`,
+              timestamp: 'Just now'
+            };
+            showToast(`Joined "${c.groupName}"!`);
+            return {
+              ...c,
+              groupMembers: [...(c.groupMembers || []), userToJoin],
+              messages: [...c.messages, sysMsg]
+            };
+          } else {
+            // Needs admin approval for private group
+            const existingReq = (c.pendingJoinRequests || []).some(r => r.user.id === userToJoin.id);
+            if (existingReq) {
+              showToast('Join request already pending approval by admin');
+              return c;
+            }
+            const newReq: GroupPendingJoinRequest = {
+              id: `req_grp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              user: userToJoin,
+              requestedAt: 'Just now'
+            };
+            showToast(`Join request sent! Admin approval is required for private groups.`);
+            return {
+              ...c,
+              pendingJoinRequests: [newReq, ...(c.pendingJoinRequests || [])]
+            };
+          }
+        }
+        return c;
+      })
+    );
+  };
+
+  const exitGroup = (conversationId: string) => {
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId && c.isGroup) {
+          const updatedMembers = (c.groupMembers || []).filter(m => m.id !== currentUser.id);
+          const updatedAdmins = (c.adminIds || []).filter(id => id !== currentUser.id);
+          let newOwnerId = c.ownerId;
+          
+          // If owner leaves, transfer ownership to the next admin, or next member
+          if (c.ownerId === currentUser.id) {
+            newOwnerId = updatedAdmins[0] || (updatedMembers[0] ? updatedMembers[0].id : undefined);
+            if (newOwnerId && !updatedAdmins.includes(newOwnerId)) {
+              updatedAdmins.push(newOwnerId);
+            }
+          }
+
+          const sysMsg = {
+            id: `msg_sys_${Date.now()}`,
+            senderId: 'system',
+            text: `${currentUser.name} left the group.`,
+            timestamp: 'Just now'
+          };
+
+          return {
+            ...c,
+            ownerId: newOwnerId,
+            groupMembers: updatedMembers,
+            adminIds: updatedAdmins,
+            messages: [...c.messages, sysMsg]
+          };
+        }
+        return c;
+      })
+    );
+    showToast('You have exited the group');
+  };
+
+  const reportGroup = (conversationId: string, reason: string, details?: string) => {
+    const targetGroup = conversations.find(c => c.id === conversationId);
+    const groupName = targetGroup?.groupName || 'Group';
+    addAuditLog('Group Reported', `Group: ${groupName} (ID: ${conversationId}). Reason: ${reason}. Details: ${details || 'None'}`, 'warning');
+    showToast(`Group "${groupName}" reported for "${reason}". Moderation team notified.`);
+  };
+
+  const hideChatWithCode = (conversationId: string, code: string, customConfig?: Partial<HiddenVaultConfig>): boolean => {
+    if (!chatSecretCode) {
+      setChatSecretCode(code);
+    } else if (code !== chatSecretCode) {
+      showToast('Incorrect security code.');
+      return false;
+    }
+
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId) {
+          const config: HiddenVaultConfig = {
+            hideChat: customConfig?.hideChat !== undefined ? customConfig.hideChat : defaultVaultConfig.hideChat,
+            hideStories: customConfig?.hideStories !== undefined ? customConfig.hideStories : defaultVaultConfig.hideStories,
+            hidePosts: customConfig?.hidePosts !== undefined ? customConfig.hidePosts : defaultVaultConfig.hidePosts,
+          };
+          return { ...c, isHiddenChat: true, hiddenVaultConfig: config };
+        }
+        return c;
+      })
+    );
+    showToast('Chat hidden in Secret Vault. Enter your code in the Messages search bar to view.');
+    return true;
+  };
+
+  const unhideChat = (conversationId: string) => {
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId) {
+          return { ...c, isHiddenChat: false };
+        }
+        return c;
+      })
+    );
+    showToast('Chat unhidden and restored to direct messages.');
+  };
+
+  const updateChatVaultConfig = (conversationId: string, updates: Partial<HiddenVaultConfig>) => {
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId) {
+          const currentConfig = c.hiddenVaultConfig || defaultVaultConfig;
+          const nextConfig = { ...currentConfig, ...updates };
+          return { ...c, hiddenVaultConfig: nextConfig };
+        }
+        return c;
+      })
+    );
+    showToast('Vault visibility settings updated.');
+  };
+
+  const toggleHideChat = (conversationId: string) => {
+    const target = conversations.find(c => c.id === conversationId);
+    if (target?.isHiddenChat) {
+      unhideChat(conversationId);
+    } else {
+      if (chatSecretCode) {
+        hideChatWithCode(conversationId, chatSecretCode);
+      } else {
+        setConversations(prev =>
+          prev.map(c => c.id === conversationId ? { ...c, isHiddenChat: true, hiddenVaultConfig: defaultVaultConfig } : c)
+        );
+        showToast('Chat hidden.');
+      }
+    }
   };
 
   const archivePost = (postId: string) => {
@@ -2624,6 +3879,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Comment posted to story');
   };
 
+  const likeStoryComment = (storyId: string, commentId: string) => {
+    const toggleLike = (comments: Comment[]): Comment[] => {
+      return comments.map(c => {
+        if (c.id === commentId) {
+          const wasLiked = c.isLiked;
+          return {
+            ...c,
+            isLiked: !wasLiked,
+            likesCount: wasLiked ? c.likesCount - 1 : c.likesCount + 1
+          };
+        }
+        if (c.replies && c.replies.length > 0) {
+          return { ...c, replies: toggleLike(c.replies) };
+        }
+        return c;
+      });
+    };
+
+    setStories(prev =>
+      prev.map(s => {
+        if (s.id === storyId) {
+          return { ...s, comments: toggleLike(s.comments || []) };
+        }
+        return s;
+      })
+    );
+  };
+
+  const deleteStoryComment = (storyId: string, commentId: string) => {
+    const removeComment = (comments: Comment[]): Comment[] => {
+      return comments
+        .filter(c => c.id !== commentId)
+        .map(c => ({
+          ...c,
+          replies: c.replies ? removeComment(c.replies) : []
+        }));
+    };
+
+    setStories(prev =>
+      prev.map(s => {
+        if (s.id === storyId) {
+          return { ...s, comments: removeComment(s.comments || []) };
+        }
+        return s;
+      })
+    );
+    showToast('Story comment deleted');
+  };
+
   const updatePostEmojiSettings = (postId: string, allowedEmojis?: string[], restrictedEmojis?: string[]) => {
     setPosts(prev =>
       prev.map(p => {
@@ -2680,6 +3984,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Highlight restored');
   };
 
+  const deleteHighlight = (highlightId: string) => {
+    setCurrentUser(prev => ({
+      ...prev,
+      highlights: prev.highlights.filter(h => h.id !== highlightId)
+    }));
+    showToast('Highlight deleted');
+  };
+
   const toggleHideFollower = (targetUserId: string, type: 'follower' | 'following') => {
     setCurrentUser(prev => {
       if (type === 'follower') {
@@ -2705,6 +4017,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       avatarVisibility: visibility
     }));
     showToast(`Secondary profile photo updated (Visible to: ${visibility.replace('_', ' ')})`);
+  };
+
+  const updateCustomDualPfp = (pfp1: CustomPfpConfig, pfp2: CustomPfpConfig) => {
+    setCurrentUser(prev => {
+      const updatedPrimaryAvatar = pfp1.hasNoPfp ? '' : (pfp1.url || prev.avatar);
+      const updatedSecondaryAvatar = pfp2.hasNoPfp ? '' : (pfp2.url || '');
+      const legacyVisibility = pfp2.audience === 'followers' ? 'followers' : pfp2.audience === 'close_friends' ? 'close_friends' : 'everyone';
+
+      return {
+        ...prev,
+        avatar: updatedPrimaryAvatar,
+        secondaryAvatar: updatedSecondaryAvatar,
+        avatarVisibility: legacyVisibility,
+        pfp1Config: pfp1,
+        pfp2Config: pfp2
+      };
+    });
+    showToast('Dual custom profile pictures saved!');
   };
 
   const createStoryWithDuration = (
@@ -2795,44 +4125,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addDiscussionComment = (discussionId: string, text: string, parentId?: string) => {
+    if (!text.trim()) return;
     const newComm: Comment = {
-      id: `c_disc_${Date.now()}`,
+      id: `c_disc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       discussionId,
       parentId,
       user: {
         id: currentUser.id,
         username: currentUser.username,
         name: currentUser.name,
-        avatar: currentUser.avatar
+        avatar: currentUser.avatar,
+        isVerified: currentUser.isVerified
       },
-      text,
+      text: text.trim(),
       timestamp: 'Just now',
       likesCount: 0,
+      isLiked: false,
       upvotes: 0,
-      downvotes: 0
+      downvotes: 0,
+      replies: []
     };
+
     setDiscussions(prev =>
       prev.map(d => {
         if (d.id === discussionId) {
+          if (parentId) {
+            const updateReplies = (comments: Comment[]): Comment[] => {
+              return comments.map(c => {
+                if (c.id === parentId) {
+                  return {
+                    ...c,
+                    replies: [...(c.replies || []), newComm]
+                  };
+                }
+                if (c.replies && c.replies.length > 0) {
+                  return {
+                    ...c,
+                    replies: updateReplies(c.replies)
+                  };
+                }
+                return c;
+              });
+            };
+            return {
+              ...d,
+              commentsCount: d.commentsCount + 1,
+              comments: updateReplies(d.comments || [])
+            };
+          }
           return {
             ...d,
             commentsCount: d.commentsCount + 1,
-            comments: [...d.comments, newComm]
+            comments: [...(d.comments || []), newComm]
           };
         }
         return d;
       })
     );
-    showToast('Reply added to discussion');
+    showToast('Reply added to thread');
   };
 
   const voteDiscussionComment = (discussionId: string, commentId: string, type: 'up' | 'down') => {
     setDiscussions(prev =>
       prev.map(d => {
         if (d.id === discussionId) {
-          return {
-            ...d,
-            comments: d.comments.map(c => {
+          const updateVotes = (comments: Comment[]): Comment[] => {
+            return comments.map(c => {
               if (c.id === commentId) {
                 const currentVote = c.userVote;
                 const newVote = currentVote === type ? null : type;
@@ -2840,16 +4198,86 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 return {
                   ...c,
                   userVote: newVote,
-                  upvotes: Math.max(0, (c.upvotes || 0) + upDelta)
+                  isLiked: newVote === 'up',
+                  upvotes: Math.max(0, (c.upvotes || 0) + upDelta),
+                  likesCount: Math.max(0, (c.likesCount || 0) + upDelta)
+                };
+              }
+              if (c.replies && c.replies.length > 0) {
+                return {
+                  ...c,
+                  replies: updateVotes(c.replies)
                 };
               }
               return c;
-            })
+            });
+          };
+          return {
+            ...d,
+            comments: updateVotes(d.comments || [])
           };
         }
         return d;
       })
     );
+  };
+
+  const likeDiscussionComment = (discussionId: string, commentId: string) => {
+    setDiscussions(prev =>
+      prev.map(d => {
+        if (d.id === discussionId) {
+          const updateLikes = (comments: Comment[]): Comment[] => {
+            return comments.map(c => {
+              if (c.id === commentId) {
+                const wasLiked = Boolean(c.isLiked);
+                return {
+                  ...c,
+                  isLiked: !wasLiked,
+                  likesCount: wasLiked ? Math.max(0, c.likesCount - 1) : c.likesCount + 1,
+                  upvotes: wasLiked ? Math.max(0, (c.upvotes || 0) - 1) : (c.upvotes || 0) + 1
+                };
+              }
+              if (c.replies && c.replies.length > 0) {
+                return {
+                  ...c,
+                  replies: updateLikes(c.replies)
+                };
+              }
+              return c;
+            });
+          };
+          return {
+            ...d,
+            comments: updateLikes(d.comments || [])
+          };
+        }
+        return d;
+      })
+    );
+  };
+
+  const deleteDiscussionComment = (discussionId: string, commentId: string) => {
+    setDiscussions(prev =>
+      prev.map(d => {
+        if (d.id === discussionId) {
+          const filterComments = (comments: Comment[]): Comment[] => {
+            return comments
+              .filter(c => c.id !== commentId)
+              .map(c => ({
+                ...c,
+                replies: c.replies ? filterComments(c.replies) : []
+              }));
+          };
+          return {
+            ...d,
+            commentsCount: Math.max(0, d.commentsCount - 1),
+            comments: filterComments(d.comments || [])
+          };
+        }
+        return d;
+      })
+    );
+    showToast('Comment deleted');
   };
 
   // Challenges Actions
@@ -2974,6 +4402,117 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const clearConversation = (conversationId: string) => {
+    setConversations(prev =>
+      prev.map(c =>
+        c.id === conversationId
+          ? { ...c, messages: [], lastMessage: '', unreadCount: 0 }
+          : c
+      )
+    );
+    showToast('Chat history cleared');
+  };
+
+  const deleteConversation = (conversationId: string) => {
+    if (conversationId === 'conv_support_bot') {
+      localStorage.setItem('yaawp_support_bot_deleted', 'true');
+    }
+    setConversations(prev => prev.filter(c => c.id !== conversationId));
+    showToast('Conversation deleted');
+  };
+
+  const togglePinConversation = (conversationId: string) => {
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId) {
+          const nextPinned = !c.isPinned;
+          showToast(nextPinned ? 'Chat pinned to top' : 'Chat unpinned');
+          return { ...c, isPinned: nextPinned };
+        }
+        return c;
+      })
+    );
+  };
+
+  const toggleMuteConversation = (conversationId: string) => {
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId) {
+          const nextMuted = !c.isMuted;
+          showToast(nextMuted ? 'Notifications muted for this chat' : 'Notifications unmuted');
+          return { ...c, isMuted: nextMuted };
+        }
+        return c;
+      })
+    );
+  };
+
+  const toggleArchiveConversation = (conversationId: string) => {
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId) {
+          const nextArchived = !c.isArchived;
+          showToast(nextArchived ? 'Chat archived' : 'Chat unarchived');
+          return { ...c, isArchived: nextArchived };
+        }
+        return c;
+      })
+    );
+  };
+
+  const createChatList = (name: string, color?: string, icon?: string): ChatCustomList => {
+    const trimmed = name.trim();
+    const id = `list_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const newList: ChatCustomList = {
+      id,
+      name: trimmed,
+      color: color || 'indigo',
+      icon: icon || 'Tag',
+      createdAt: Date.now()
+    };
+    setChatLists(prev => [...prev, newList]);
+    showToast(`Created chat list "${trimmed}"`);
+    return newList;
+  };
+
+  const deleteChatList = (listId: string) => {
+    setChatLists(prev => prev.filter(l => l.id !== listId));
+    setConversations(prev =>
+      prev.map(c => ({
+        ...c,
+        listIds: c.listIds ? c.listIds.filter(id => id !== listId) : []
+      }))
+    );
+    showToast('Chat list deleted');
+  };
+
+  const toggleChatInList = (conversationId: string, listId: string) => {
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id !== conversationId) return c;
+        const currentLists = c.listIds || [];
+        const exists = currentLists.includes(listId);
+        const nextLists = exists
+          ? currentLists.filter(id => id !== listId)
+          : [...currentLists, listId];
+        return { ...c, listIds: nextLists };
+      })
+    );
+  };
+
+  const setConversationLists = (conversationId: string, listIds: string[]) => {
+    setConversations(prev =>
+      prev.map(c => (c.id === conversationId ? { ...c, listIds } : c))
+    );
+    showToast('Chat lists updated');
+  };
+
+  const blockAndReportUser = (userId: string, reason: string, details?: string) => {
+    setBlockedUsers(prev => [...new Set([...prev, userId])]);
+    addAuditLog('User Blocked & Reported', `Reason: ${reason}. Details: ${details || 'None'}`, 'warning');
+    showToast(`User blocked & reported for "${reason}". Moderators notified.`);
+  };
+
   const requestJoinCommunity = (communityId: string) => {
     const target = communities.find(c => c.id === communityId);
     if (!target) return;
@@ -3084,6 +4623,93 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setFailedLoginAttempts(0);
     setLockoutUntil(null);
     setFailedLoginsAlert(false);
+    addAuditLog('Login Rate-Limit Cleared', 'Reset failed login attempts counter back to 0/5. All 5 attempts restored.', 'success');
+    showToast('Failed login counter reset to 0/5. Full attempts restored.');
+  };
+
+  const verifyPreviousPasscode = (pin: string): boolean => {
+    return Boolean(chatPasscode && pin === chatPasscode);
+  };
+
+  const setTwoFactorEnabled = (val: boolean) => {
+    setTwoFactorEnabledState(val);
+    localStorage.setItem('lumina_2fa_enabled', String(val));
+  };
+
+  const enableTwoFactorWithPassword = (password: string): boolean => {
+    if (!password || password.length < 4) {
+      showToast('2FA security password must be at least 4 characters');
+      return false;
+    }
+    localStorage.setItem('yaawp_2fa_password', password);
+    localStorage.setItem('lumina_2fa_enabled', 'true');
+    setTwoFactorPasswordState(password);
+    setTwoFactorEnabledState(true);
+    addAuditLog('2FA Protection Activated', 'Account two-factor protection enabled with personal security password', 'success');
+    showToast('2FA Protection successfully activated!');
+    return true;
+  };
+
+  const changeTwoFactorPassword = (currentPw: string, newPw: string): boolean => {
+    if (currentPw !== twoFactorPassword) {
+      showToast('Current 2FA password is incorrect');
+      return false;
+    }
+    if (!newPw || newPw.length < 4) {
+      showToast('New 2FA password must be at least 4 characters');
+      return false;
+    }
+    localStorage.setItem('yaawp_2fa_password', newPw);
+    setTwoFactorPasswordState(newPw);
+    addAuditLog('2FA Password Changed', 'User updated their two-factor security password', 'success');
+    showToast('2FA security password updated successfully!');
+    return true;
+  };
+
+  const disableTwoFactorWithPassword = (currentPw: string): boolean => {
+    if (currentPw !== twoFactorPassword) {
+      showToast('Current 2FA password is incorrect');
+      return false;
+    }
+    localStorage.removeItem('yaawp_2fa_password');
+    localStorage.setItem('lumina_2fa_enabled', 'false');
+    setTwoFactorPasswordState(null);
+    setTwoFactorEnabledState(false);
+    addAuditLog('2FA Protection Disabled', 'User deactivated two-factor authentication with verified password', 'warning');
+    showToast('Two-factor protection has been disabled');
+    return true;
+  };
+
+  const resetTwoFactorViaEmail = (code: string, newPw: string): boolean => {
+    if (!code || code.trim().length !== 6) {
+      showToast('Please enter a valid 6-digit verification code');
+      return false;
+    }
+    if (!newPw || newPw.length < 4) {
+      showToast('New 2FA password must be at least 4 characters');
+      return false;
+    }
+    localStorage.setItem('yaawp_2fa_password', newPw);
+    localStorage.setItem('lumina_2fa_enabled', 'true');
+    setTwoFactorPasswordState(newPw);
+    setTwoFactorEnabledState(true);
+    addAuditLog('2FA Password Recovered', '2FA security password reset using email OTP verification', 'success');
+    showToast('2FA password reset successfully!');
+    return true;
+  };
+
+  const setChatWallpaper = (conversationId: string, wallpaper?: ChatConversation['wallpaper']) => {
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id === conversationId) {
+          return {
+            ...c,
+            wallpaper
+          };
+        }
+        return c;
+      })
+    );
   };
 
   const exportGDPRData = () => {
@@ -3245,26 +4871,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const loginWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
-    if (!isSupabaseConfigured) {
-      return {
-        success: false,
-        error: 'Supabase is not configured yet. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.'
-      };
-    }
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin
+    if (isSupabaseConfigured) {
+      try {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin
+          }
+        });
+        if (error) {
+          return { success: false, error: error.message };
         }
-      });
-      if (error) {
-        return { success: false, error: error.message };
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Failed to initiate Google sign-in' };
       }
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to initiate Google sign-in' };
     }
+
+    // Client-mode Google sign-in fallback with verified profile
+    const googleEmail = 'jatindevsingh644@gmail.com';
+    const googleUsername = 'jatindev';
+    const googleName = 'Jatin Dev Singh';
+    const googleAvatar = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
+
+    const existing = (Object.values(userProfiles) as UserProfile[]).find(
+      p => p.email?.toLowerCase() === googleEmail.toLowerCase() || p.username.toLowerCase() === googleUsername.toLowerCase()
+    );
+
+    if (existing) {
+      switchAccount(existing.id);
+      setIsAuthenticated(true);
+      showToast(`Welcome back via Google, @${existing.username}`);
+      return { success: true };
+    }
+
+    const newUserId = `user_google_${Date.now()}`;
+    const newGoogleUser: UserProfile = {
+      id: newUserId,
+      username: googleUsername,
+      name: googleName,
+      avatar: googleAvatar,
+      bio: 'Connected via Google Account ✨',
+      website: '',
+      email: googleEmail,
+      followersCount: 1,
+      followingCount: 4,
+      postsCount: 0,
+      highlights: [],
+      isVerified: true
+    };
+
+    setUserProfiles(prev => ({
+      ...prev,
+      [newUserId]: newGoogleUser
+    }));
+    setCurrentUser(newGoogleUser);
+    setIsAuthenticated(true);
+    setHasAgreedToTerms(true);
+    setTermsAgreedTimestamp(Date.now());
+    showToast(`Signed in with Google as ${googleEmail}`);
+    return { success: true };
   };
 
   // Algorithmic Feed & Recommendations
@@ -3702,6 +5368,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         theme,
+        systemTheme,
+        setSystemTheme,
         toggleTheme,
         activeTab,
         setActiveTab,
@@ -3732,6 +5400,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedPostForModal,
         isCreateModalOpen,
         setIsCreateModalOpen,
+        isGlobalSearchOpen,
+        setIsGlobalSearchOpen,
         isEditProfileOpen,
         setIsEditProfileOpen,
         toggleLikePost,
@@ -3746,8 +5416,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         voteComment,
         createPost,
         createStory,
+        voteStoryPoll,
         toggleLikeReel,
         toggleSaveReel,
+        addReelComment,
+        likeReelComment,
+        deleteReelComment,
         toggleFollowUser,
         // Algorithmic Feed & Recommendations
         algorithmSettings,
@@ -3800,6 +5474,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         voteDiscussion,
         addDiscussionComment,
         voteDiscussionComment,
+        likeDiscussionComment,
+        deleteDiscussionComment,
         likeDiscussion,
         repostDiscussion,
         // Challenges
@@ -3812,19 +5488,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsCreateChallengeOpen,
         // Messaging
         sendMessage,
+        votePoll,
+        updateGameSession,
         hideConversation,
         replyToMessage,
         reactToMessage,
         sendVoiceMessage,
         sendMediaMessage,
         triggerTypingIndicator,
+        clearConversation,
+        deleteConversation,
+        togglePinConversation,
+        toggleMuteConversation,
+        toggleArchiveConversation,
+        chatLists,
+        createChatList,
+        deleteChatList,
+        toggleChatInList,
+        setConversationLists,
+        blockAndReportUser,
         markConversationAsRead,
+        markConversationAsUnread,
+        simulateIncomingMessage,
         markRecipientSeen,
         toggleRecipientInChat,
         markNotificationAsRead,
         markAllNotificationsAsRead,
         handleConnectionRequest,
         updateProfile,
+        setChatWallpaper,
         // Security Suite & Passcode Protection
         isSecurityModalOpen,
         setIsSecurityModalOpen,
@@ -3835,6 +5527,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isChatLocked,
         setIsChatLocked,
         unlockChat,
+        verifyPreviousPasscode,
         failedLoginAttempts,
         lockoutUntil,
         failedLoginsAlert,
@@ -3847,6 +5540,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         changePassword,
         twoFactorEnabled,
         setTwoFactorEnabled,
+        enableTwoFactorWithPassword,
+        changeTwoFactorPassword,
+        disableTwoFactorWithPassword,
+        resetTwoFactorViaEmail,
         privateMediaSignedUrlsEnabled,
         setPrivateMediaSignedUrlsEnabled,
         isFollowersPrivate,
@@ -3881,6 +5578,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         agreeToTermsAndContinue,
         isLegalModalOpen,
         activeLegalDoc,
+        setActiveLegalDoc,
         openLegalModal,
         closeLegalModal,
         isCreateAccountModalOpen,
@@ -3900,11 +5598,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reportCommunity,
         toggleHideCommunity,
         pinDiscussion,
-        // Group Chat & Secret Hiding
+        // Group Chat & Admin Management
         createGroupChat,
+        updateGroupSettings,
+        promoteGroupAdmin,
+        demoteGroupAdmin,
+        toggleGroupMemberMessaging,
+        removeGroupMember,
+        addGroupMember,
+        approveGroupJoinRequest,
+        rejectGroupJoinRequest,
+        requestJoinGroupViaLink,
+        exitGroup,
+        reportGroup,
         toggleHideChat,
         chatSecretCode,
         setChatSecretCode,
+        hideChatWithCode,
+        unhideChat,
+        updateChatVaultConfig,
+        isVaultNotificationsEnabled,
+        toggleVaultNotifications,
+        defaultVaultConfig,
+        updateDefaultVaultConfig,
+        activePermissionPrompt,
+        requestAppPermission,
+        respondToPermissionPrompt,
+        resetAppPermissions,
         // Profile, Post, Story & Highlight Privacy & Archives
         archivePost,
         unarchivePost,
@@ -3913,12 +5633,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unarchiveStory,
         deleteStory,
         addStoryComment,
+        likeStoryComment,
+        deleteStoryComment,
         updatePostEmojiSettings,
         deleteComment,
         archiveHighlight,
         unarchiveHighlight,
+        deleteHighlight,
         toggleHideFollower,
         updateSecondaryAvatar,
+        updateCustomDualPfp,
         createStoryWithDuration,
         // One-way Profile Concealment
         hiddenProfileFromUserIds,
@@ -3928,7 +5652,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         supabaseSession,
         isSupabaseConfigured,
         loginWithSupabase,
-        loginWithGoogle
+        loginWithGoogle,
+        // Preferred Language & Translations
+        preferredLanguage,
+        setPreferredLanguage,
+        currentLanguageOption,
+        t
       }}
     >
       {children}

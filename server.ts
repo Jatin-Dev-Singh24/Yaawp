@@ -3,10 +3,10 @@ import path from "path";
 
 async function startServer() {
   const app = express();
+  const PORT = 3000;
   const isProduction =
     process.env.NODE_ENV === "production" ||
     (typeof __filename !== "undefined" && __filename.endsWith(".cjs"));
-  const PORT = isProduction && process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   app.use(express.json());
 
@@ -16,6 +16,10 @@ async function startServer() {
   });
 
   app.get("/_health", (req, res) => {
+    res.status(200).send("ok");
+  });
+
+  app.get("/healthz", (req, res) => {
     res.status(200).send("ok");
   });
 

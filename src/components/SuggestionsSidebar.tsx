@@ -1,14 +1,18 @@
 import React from 'react';
 import { Users as UsersIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { USERS } from '../data/mockData';
 import { CommunityJoinButton } from './CommunityJoinButton';
 
 export const SuggestionsSidebar: React.FC = () => {
+  const navigate = useNavigate();
   const {
     currentUser,
     setActiveTab,
     toggleFollowUser,
+    followedUserIds,
+    openUserProfile,
     setIsCreateAccountModalOpen,
     openLegalModal,
     communities
@@ -16,6 +20,12 @@ export const SuggestionsSidebar: React.FC = () => {
 
   const suggestedUsers = Object.values(USERS).slice(0, 4);
   const featuredCommunities = communities.slice(0, 2);
+
+  const handleOpenUser = (userId: string) => {
+    openUserProfile(userId);
+    setActiveTab('profile');
+    navigate('/app/profile');
+  };
 
   return (
     <aside
@@ -26,7 +36,11 @@ export const SuggestionsSidebar: React.FC = () => {
       {/* Current User Header */}
       <div className="flex items-center justify-between">
         <div
-          onClick={() => setActiveTab('profile')}
+          onClick={() => {
+            openUserProfile(currentUser.id);
+            setActiveTab('profile');
+            navigate('/app/profile');
+          }}
           className="flex items-center space-x-3 cursor-pointer group"
         >
           <img
@@ -61,7 +75,10 @@ export const SuggestionsSidebar: React.FC = () => {
             Suggestions for you
           </span>
           <button
-            onClick={() => setActiveTab('explore')}
+            onClick={() => {
+              setActiveTab('explore');
+              navigate('/app/explore');
+            }}
             className="text-xs font-bold text-slate-800 dark:text-slate-200 hover:opacity-75 transition-opacity"
           >
             See All
@@ -70,40 +87,47 @@ export const SuggestionsSidebar: React.FC = () => {
 
         {/* Suggested List */}
         <div className="space-y-4">
-          {suggestedUsers.map(user => (
-            <div
-              key={user.id}
-              id={`suggested-user-${user.username}`}
-              className="flex items-center justify-between"
-            >
-              <div className="flex items-center space-x-3 min-w-0">
-                <img
-                  src={user.avatar}
-                  alt={user.username}
-                  className="w-8 h-8 rounded-full object-cover shrink-0"
-                />
-                <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate max-w-[130px]">
-                    {user.username}
-                  </span>
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-[130px]">
-                    {user.bioSnippet || 'Suggested for you'}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                onClick={() => toggleFollowUser(user.id)}
-                className={`text-xs font-bold transition-colors shrink-0 ${
-                  user.isFollowing
-                    ? 'text-slate-400 hover:text-rose-500'
-                    : 'text-indigo-600 dark:text-indigo-400 hover:text-indigo-700'
-                }`}
+          {suggestedUsers.map(user => {
+            const isFollowing = followedUserIds.includes(user.id);
+            return (
+              <div
+                key={user.id}
+                id={`suggested-user-${user.username}`}
+                className="flex items-center justify-between"
               >
-                {user.isFollowing ? 'Following' : 'Follow'}
-              </button>
-            </div>
-          ))}
+                <div
+                  onClick={() => handleOpenUser(user.id)}
+                  className="flex items-center space-x-3 min-w-0 cursor-pointer group"
+                >
+                  <img
+                    src={user.avatar}
+                    alt={user.username}
+                    className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-transparent group-hover:ring-indigo-400 transition-all"
+                  />
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate max-w-[130px] group-hover:underline">
+                      {user.username}
+                    </span>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-[130px]">
+                      {user.bioSnippet || 'Suggested for you'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  id={`suggested-follow-${user.id}`}
+                  onClick={() => toggleFollowUser(user.id)}
+                  className={`text-xs font-bold transition-colors shrink-0 ${
+                    isFollowing
+                      ? 'text-slate-400 hover:text-rose-500'
+                      : 'text-indigo-600 dark:text-indigo-400 hover:text-indigo-700'
+                  }`}
+                >
+                  {isFollowing ? 'Following' : 'Follow'}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -126,7 +150,7 @@ export const SuggestionsSidebar: React.FC = () => {
           {featuredCommunities.map(comm => (
             <div
               key={comm.id}
-              className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60"
+              className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 ambient-glow transition-all"
             >
               <div
                 onClick={() => setActiveTab('communities')}

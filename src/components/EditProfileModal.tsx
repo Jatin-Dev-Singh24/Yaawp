@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Camera, Check, Upload, Loader2 } from 'lucide-react';
+import { X, Camera, Check, Upload, Loader2, Globe } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { uploadMediaToSupabase } from '../lib/supabaseStorage';
+import { INITIAL_LANGUAGES } from '../translations';
 
 const PRESET_AVATARS = [
   'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
@@ -17,13 +18,16 @@ export const EditProfileModal: React.FC = () => {
     setIsEditProfileOpen,
     currentUser,
     updateProfile,
-    showToast
+    showToast,
+    preferredLanguage,
+    setPreferredLanguage
   } = useApp();
 
   const [name, setName] = useState(currentUser.name);
   const [username, setUsername] = useState(currentUser.username);
   const [bio, setBio] = useState(currentUser.bio);
   const [website, setWebsite] = useState(currentUser.website || '');
+  const [language, setLanguage] = useState(currentUser.preferred_language || preferredLanguage || 'en');
   const [avatar, setAvatar] = useState(currentUser.avatar);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -37,10 +41,11 @@ export const EditProfileModal: React.FC = () => {
       setUsername(currentUser.username);
       setBio(currentUser.bio);
       setWebsite(currentUser.website || '');
+      setLanguage(currentUser.preferred_language || preferredLanguage || 'en');
       setAvatar(currentUser.avatar);
       setSelectedFile(null);
     }
-  }, [isEditProfileOpen, currentUser]);
+  }, [isEditProfileOpen, currentUser, preferredLanguage]);
 
   if (!isEditProfileOpen) return null;
 
@@ -76,8 +81,12 @@ export const EditProfileModal: React.FC = () => {
         username: username.trim() || currentUser.username,
         bio: bio.trim(),
         website: website.trim() || undefined,
-        avatar: finalAvatar
+        avatar: finalAvatar,
+        preferred_language: language
       });
+      if (language !== preferredLanguage) {
+        setPreferredLanguage(language);
+      }
       setIsEditProfileOpen(false);
     } catch (err) {
       console.error('Failed to update avatar:', err);
@@ -92,7 +101,7 @@ export const EditProfileModal: React.FC = () => {
       id="edit-profile-modal"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
     >
-      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150">
+      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150 ambient-glow">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
           <button
@@ -158,7 +167,7 @@ export const EditProfileModal: React.FC = () => {
                   Upload new photo
                 </button>
                 <p className="text-[10px] text-slate-400">
-                  PNG, JPG or WEBP supported
+                  PNG, JPG supported
                 </p>
                 <input
                   ref={fileInputRef}
@@ -240,6 +249,31 @@ export const EditProfileModal: React.FC = () => {
               placeholder="https://yourwebsite.com"
               className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
+          </div>
+
+          {/* Preferred Language */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-indigo-500" />
+                Preferred Language
+              </label>
+              <span className="text-[10px] text-slate-400">
+                30 available
+              </span>
+            </div>
+            <select
+              id="edit-preferred-language-select"
+              value={language}
+              onChange={e => setLanguage(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            >
+              {INITIAL_LANGUAGES.map(lang => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.nativeName} ({lang.name})
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Bio */}

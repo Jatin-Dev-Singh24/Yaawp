@@ -135,23 +135,15 @@ export const ChatPasscodeLock: React.FC = () => {
           </button>
         </div>
 
-        {/* Fallback / Reset Helpers */}
-        <div className="flex items-center justify-between w-full mt-6 text-[11px] text-slate-500 dark:text-slate-400">
-          <button
-            type="button"
-            onClick={() => showToast(`Hint: Saved PIN is "${chatPasscode}"`)}
-            className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-1"
-          >
-            <KeyRound className="w-3 h-3" />
-            Show Hint
-          </button>
-
+        {/* Secure Reset Helper */}
+        <div className="flex items-center justify-center w-full mt-6 text-[11px] text-slate-500 dark:text-slate-400">
           <button
             type="button"
             onClick={handleEmergencyBypass}
-            className="hover:text-rose-500 transition-colors"
+            className="hover:text-rose-500 transition-colors flex items-center gap-1.5 cursor-pointer py-1 px-2.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30"
           >
-            Reset PIN
+            <KeyRound className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+            <span>Forgot PIN? Reset Passcode</span>
           </button>
         </div>
       </div>

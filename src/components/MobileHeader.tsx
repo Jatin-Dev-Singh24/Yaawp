@@ -1,8 +1,10 @@
 import React from 'react';
 import { Heart, Moon, Sun, PenSquare } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
 export const MobileHeader: React.FC = () => {
+  const navigate = useNavigate();
   const {
     setActiveTab,
     unreadNotifsCount,
@@ -18,7 +20,10 @@ export const MobileHeader: React.FC = () => {
     >
       <div
         id="mobile-logo-btn"
-        onClick={() => setActiveTab('feed')}
+        onClick={() => {
+          setActiveTab('feed');
+          navigate('/app/home');
+        }}
         className="flex items-center gap-1.5 cursor-pointer"
       >
         <span className="text-3xl font-normal tracking-tight text-slate-800 dark:text-slate-100 font-monte-carlo">
@@ -26,7 +31,7 @@ export const MobileHeader: React.FC = () => {
         </span>
       </div>
 
-      {/* Top Right: Dark mode, Notifications, Create button (no other options) */}
+      {/* Top Right: Dark mode, Notifications, Create button */}
       <div className="flex items-center gap-2">
         {/* 1. Dark Mode Toggle */}
         <button
@@ -45,7 +50,10 @@ export const MobileHeader: React.FC = () => {
         {/* 2. Notifications */}
         <button
           id="mobile-notif-btn"
-          onClick={() => setActiveTab('notifications')}
+          onClick={() => {
+            setActiveTab('notifications');
+            navigate('/app/notifications');
+          }}
           className="relative text-slate-700 dark:text-slate-200 p-1.5 hover:text-slate-900 dark:hover:text-white transition-colors"
           aria-label="Notifications"
         >
@@ -59,9 +67,8 @@ export const MobileHeader: React.FC = () => {
         <button
           id="mobile-create-post-btn"
           onClick={() => setIsCreateModalOpen(true)}
-          className="p-1.5 text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+          className="flex items-center justify-center p-1.5 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
           aria-label="Create Post"
-          title="Create post"
         >
           <PenSquare className="w-5 h-5 stroke-[1.8px]" />
         </button>

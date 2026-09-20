@@ -2,6 +2,13 @@ import React, { useState } from 'react';
 import { Heart, MessageSquare, ChevronDown, ChevronRight, CornerDownRight, Send, Trash2 } from 'lucide-react';
 import { Comment, UserSummary } from '../types';
 import { ConfirmationModal } from './ConfirmationModal';
+import { FormattedText } from './FormattedText';
+import { EmojiKitchenModal } from './EmojiKitchenModal';
+import { EmojiBlendSuggestionBanner } from './EmojiBlendSuggestionBanner';
+import {
+  detectEmojiBlendInText,
+  formatBlendToken
+} from '../data/emojiKitchen';
 
 interface ThreadedCommentTreeProps {
   comments: Comment[];
@@ -69,6 +76,8 @@ const CommentNode: React.FC<CommentNodeProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
   const [replyText, setReplyText] = useState('');
+  const [isKitchenOpen, setIsKitchenOpen] = useState(false);
+  const [dismissedBlendKey, setDismissedBlendKey] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const hasReplies = comment.replies && comment.replies.length > 0;
@@ -135,9 +144,9 @@ const CommentNode: React.FC<CommentNodeProps> = ({
           {!isCollapsed && (
             <>
               {/* Comment text */}
-              <p className="text-slate-800 dark:text-slate-200 leading-relaxed break-words">
-                {comment.text}
-              </p>
+              <div className="text-slate-800 dark:text-slate-200 leading-relaxed break-words">
+                <FormattedText text={comment.text} />
+              </div>
 
               {/* Actions row */}
               <div className="flex items-center gap-3 pt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
@@ -199,35 +208,83 @@ const CommentNode: React.FC<CommentNodeProps> = ({
 
               {/* Inlined Reply Composer */}
               {isReplying && (
-                <form
-                  onSubmit={handleSubmitReply}
-                  className="mt-2 flex items-center gap-2 p-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 animate-in fade-in"
-                >
-                  <CornerDownRight className="w-3.5 h-3.5 text-indigo-500 shrink-0 ml-1" />
-                  <input
-                    type="text"
-                    autoFocus
-                    value={replyText}
-                    onChange={e => setReplyText(e.target.value)}
-                    placeholder={`Reply to @${comment.user.username}...`}
-                    className="flex-1 bg-transparent text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!replyText.trim()}
-                    className="px-2.5 py-1 rounded-lg bg-indigo-600 dark:bg-indigo-500 text-white font-semibold text-[11px] disabled:opacity-40 hover:bg-indigo-700 transition-colors flex items-center gap-1"
+                <div className="mt-2 space-y-1.5">
+                  {/* Emoji Blend Suggestion Banner */}
+                  {(() => {
+                    const detected = detectEmojiBlendInText(replyText);
+                    if (detected && dismissedBlendKey !== `${detected.blend.id}_${detected.match}`) {
+                      return (
+                        <EmojiBlendSuggestionBanner
+                          blend={detected.blend}
+                          onApplyBlend={blend => {
+                            const token = formatBlendToken(blend);
+                            setReplyText(prev => prev.replace(detected.match, `${token} `));
+                          }}
+                          onOpenKitchen={() => setIsKitchenOpen(true)}
+                          onDismiss={() => {
+                            setDismissedBlendKey(`${detected.blend.id}_${detected.match}`);
+                          }}
+                        />
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  <form
+                    onSubmit={handleSubmitReply}
+                    className="flex items-center gap-1.5 p-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 animate-in fade-in"
                   >
-                    <Send className="w-3 h-3" />
-                    <span>Send</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsReplying(false)}
-                    className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-1"
-                  >
-                    Cancel
-                  </button>
-                </form>
+                    <CornerDownRight className="w-3.5 h-3.5 text-indigo-500 shrink-0 ml-1" />
+
+                    <button
+                      type="button"
+                      onClick={() => setIsKitchenOpen(true)}
+                      className="p-1 rounded-md text-xs text-slate-400 hover:text-indigo-600 transition-colors"
+                      title="Emoji Kitchen Lab"
+                      aria-label="Emoji Kitchen"
+                    >
+                      🧪
+                    </button>
+
+                    <input
+                      type="text"
+                      autoFocus
+                      value={replyText}
+                      onChange={e => setReplyText(e.target.value)}
+                      placeholder={`Reply to @${comment.user.username}...`}
+                      className="flex-1 bg-transparent text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!replyText.trim()}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-600 dark:bg-indigo-500 text-white font-semibold text-[11px] disabled:opacity-40 hover:bg-indigo-700 transition-colors flex items-center gap-1"
+                    >
+                      <Send className="w-3 h-3" />
+                      <span>Send</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsReplying(false)}
+                      className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-1"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+
+                  {/* Emoji Kitchen Modal for reply */}
+                  {isKitchenOpen && (
+                    <EmojiKitchenModal
+                      isOpen={isKitchenOpen}
+                      onClose={() => setIsKitchenOpen(false)}
+                      onSelectBlend={(blend) => {
+                        const token = formatBlendToken(blend);
+                        setReplyText(prev => (prev ? `${prev} ${token}` : token));
+                        setIsKitchenOpen(false);
+                      }}
+                      insertButtonLabel="Add to Reply"
+                    />
+                  )}
+                </div>
               )}
 
               {/* Nested Replies */}

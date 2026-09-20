@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Grid,
   UserCheck,
@@ -29,11 +30,15 @@ import {
   UserX,
   MoreHorizontal,
   Flag,
-  BarChart3
+  BarChart3,
+  Ban,
+  Globe
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Post } from '../types';
 import { AnalyticsView } from './AnalyticsView';
+import { ProfileSkeleton } from './SkeletonScreens';
+import { getLanguageByCode } from '../translations';
 
 export const ProfileView: React.FC = () => {
   const {
@@ -49,6 +54,9 @@ export const ProfileView: React.FC = () => {
     toggleFollowUser,
     startConversationWithUser,
     followedUserIds,
+    blockedUsers,
+    blockUser,
+    unblockUser,
     setActiveTab: setNavActiveTab,
     showToast,
     openLegalModal,
@@ -62,15 +70,26 @@ export const ProfileView: React.FC = () => {
     archivePost,
     toggleHidePostFromGrid,
     archiveHighlight,
+    deleteHighlight,
     isFollowersPrivate,
     hiddenProfileFromUserIds,
-    toggleHideMyProfileFrom
+    toggleHideMyProfileFrom,
+    preferredLanguage,
+    currentLanguageOption,
+    t
   } = useApp();
+
+  const navigate = useNavigate();
 
   // Tabs: Posts, Reels, Analytics, Reposts, Tagged
   const [activeTab, setActiveTab] = useState<'posts' | 'reels' | 'analytics' | 'reposts' | 'tagged'>('posts');
   const [otherProfileMenuOpen, setOtherProfileMenuOpen] = useState(false);
   const [previewAsRestrictedUser, setPreviewAsRestrictedUser] = useState(false);
+  const [activeViewingHighlight, setActiveViewingHighlight] = useState<{
+    id: string;
+    title: string;
+    coverUrl: string;
+  } | null>(null);
 
   // Modal for Followers / Following list with privacy and hide toggles
   const [followListModal, setFollowListModal] = useState<'followers' | 'following' | null>(null);
@@ -89,6 +108,17 @@ export const ProfileView: React.FC = () => {
   const isOwnProfile = !viewedUserId || viewedUserId === currentUser.id;
   const activeProfile = isOwnProfile ? currentUser : getUserProfile(viewedUserId);
   const isFollowing = followedUserIds.includes(activeProfile.id);
+  const isBlocked = !isOwnProfile && blockedUsers.includes(activeProfile.id);
+
+  // Skeleton loading on profile navigation
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  useEffect(() => {
+    setIsProfileLoading(true);
+    const timer = setTimeout(() => {
+      setIsProfileLoading(false);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [viewedUserId]);
 
   // Filter posts
   const userPosts = posts.filter(p => p.user.id === activeProfile.id);
@@ -117,6 +147,14 @@ export const ProfileView: React.FC = () => {
     });
   };
 
+  if (isProfileLoading) {
+    return (
+      <div id="profile-view-loading" className="w-full max-w-4xl mx-auto py-6 px-3 md:px-8">
+        <ProfileSkeleton />
+      </div>
+    );
+  }
+
   // If viewing a user who has hidden their profile from the current logged in user
   const isProfileHiddenFromCurrentViewer =
     !isOwnProfile &&
@@ -136,7 +174,7 @@ export const ProfileView: React.FC = () => {
           </button>
         </div>
 
-        <div className="max-w-md mx-auto py-16 px-6 bg-zinc-950/80 border border-zinc-800/80 rounded-3xl space-y-4">
+        <div className="max-w-md mx-auto py-16 px-6 bg-zinc-950/80 border border-zinc-800/80 rounded-3xl space-y-4 ambient-glow">
           <div className="w-20 h-20 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto text-rose-400">
             <UserX className="w-10 h-10" />
           </div>
@@ -173,14 +211,20 @@ export const ProfileView: React.FC = () => {
         </div>
       )}
 
-      {/* Profile Header */}
-      <div className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-14 mb-8 relative">
+      {/* Profile Header Container */}
+      <div
+        id="profile-header-card"
+        className="p-6 md:p-8 rounded-3xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-sm flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-14 mb-8 relative ambient-glow transition-all"
+      >
         {/* Top Right 3-Bar Settings Button */}
         {isOwnProfile && (
           <div className="absolute top-0 right-0 z-20">
             <button
               id="profile-3bar-settings-btn"
-              onClick={() => setIsProfileMenuOpen(true)}
+              onClick={() => {
+                setNavActiveTab('settings');
+                navigate('/app/settings');
+              }}
               className="p-2.5 rounded-2xl bg-zinc-100 dark:bg-zinc-800/90 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white transition-all shadow-xs flex items-center gap-1.5 hover:scale-105 active:scale-95"
               title="Settings and activity"
             >
@@ -193,9 +237,12 @@ export const ProfileView: React.FC = () => {
         <div
           className={`relative group shrink-0 ${isOwnProfile ? 'cursor-pointer' : ''}`}
           onClick={() => {
-            if (isOwnProfile) setIsProfileMenuOpen(true);
+            if (isOwnProfile) {
+              setNavActiveTab('settings');
+              navigate('/app/settings');
+            }
           }}
-          title={isOwnProfile ? 'Click to manage Dual Profile Pictures' : undefined}
+          title={isOwnProfile ? 'Click to manage Dual Profile Pictures in Settings' : undefined}
         >
           <div className="p-1 rounded-full ig-gradient shadow-md">
             <img
@@ -289,33 +336,56 @@ export const ProfileView: React.FC = () => {
               </>
             ) : (
               <>
-                <button
-                  id={`profile-toggle-follow-${activeProfile.id}`}
-                  onClick={() => toggleFollowUser(activeProfile.id)}
-                  className={`px-4 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                    isFollowing
-                      ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400'
-                      : 'bg-lime-400 text-zinc-950 font-bold hover:bg-lime-300'
-                  }`}
-                >
-                  {isFollowing ? (
-                    'Following'
-                  ) : (
-                    <>
-                      <UserPlus className="w-3.5 h-3.5" />
-                      Follow
-                    </>
-                  )}
-                </button>
+                {isBlocked ? (
+                  <button
+                    id={`profile-unblock-btn-${activeProfile.id}`}
+                    onClick={() => unblockUser(activeProfile.id)}
+                    className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30 transition-colors flex items-center gap-1.5"
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                    Unblock
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      id={`profile-toggle-follow-${activeProfile.id}`}
+                      onClick={() => toggleFollowUser(activeProfile.id)}
+                      className={`px-4 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                        isFollowing
+                          ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400'
+                          : 'bg-lime-400 text-zinc-950 font-bold hover:bg-lime-300'
+                      }`}
+                    >
+                      {isFollowing ? (
+                        'Following'
+                      ) : (
+                        <>
+                          <UserPlus className="w-3.5 h-3.5" />
+                          Follow
+                        </>
+                      )}
+                    </button>
 
-                <button
-                  id={`profile-message-btn-${activeProfile.id}`}
-                  onClick={() => startConversationWithUser(activeProfile)}
-                  className="px-3.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-xs font-semibold text-slate-900 dark:text-white transition-colors flex items-center gap-1.5"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  Message
-                </button>
+                    <button
+                      id={`profile-message-btn-${activeProfile.id}`}
+                      onClick={() => startConversationWithUser(activeProfile)}
+                      className="px-3.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-xs font-semibold text-slate-900 dark:text-white transition-colors flex items-center gap-1.5"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      Message
+                    </button>
+
+                    <button
+                      id={`profile-block-btn-${activeProfile.id}`}
+                      onClick={() => blockUser(activeProfile.id)}
+                      className="px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-rose-500/20 hover:text-rose-400 text-xs font-semibold text-zinc-500 dark:text-zinc-400 transition-colors flex items-center gap-1.5"
+                      title="Block this user"
+                    >
+                      <Ban className="w-3.5 h-3.5 text-rose-500" />
+                      Block
+                    </button>
+                  </>
+                )}
 
                 <button
                   onClick={handleShareProfile}
@@ -338,6 +408,30 @@ export const ProfileView: React.FC = () => {
 
                   {otherProfileMenuOpen && (
                     <div className="absolute left-0 sm:right-0 sm:left-auto top-9 z-30 w-60 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xl p-1.5 space-y-1 text-xs text-zinc-200 animate-in fade-in">
+                      <button
+                        id={`menu-block-toggle-btn-${activeProfile.id}`}
+                        onClick={() => {
+                          if (isBlocked) {
+                            unblockUser(activeProfile.id);
+                          } else {
+                            blockUser(activeProfile.id);
+                          }
+                          setOtherProfileMenuOpen(false);
+                        }}
+                        className={`w-full px-3 py-2 text-left rounded-xl flex items-center gap-2.5 font-medium transition-colors ${
+                          isBlocked
+                            ? 'text-lime-400 hover:bg-lime-400/10'
+                            : 'text-rose-400 hover:bg-rose-500/10'
+                        }`}
+                      >
+                        <Ban className="w-4 h-4 shrink-0" />
+                        <span>
+                          {isBlocked
+                            ? `Unblock @${activeProfile.username}`
+                            : `Block @${activeProfile.username}`}
+                        </span>
+                      </button>
+
                       <button
                         id="menu-hide-my-profile-btn"
                         onClick={() => {
@@ -452,12 +546,50 @@ export const ProfileView: React.FC = () => {
               ))}
             </div>
           )}
+
+          {/* Preferred Language Display */}
+          {(() => {
+            const langCode = isOwnProfile ? preferredLanguage : (activeProfile.preferred_language || 'en');
+            const langOpt = getLanguageByCode(langCode);
+            return (
+              <div className="pt-1 flex items-center justify-center md:justify-start">
+                <button
+                  id="profile-preferred-language-badge"
+                  type="button"
+                  onClick={() => {
+                    if (isOwnProfile) {
+                      setIsProfileMenuOpen(true);
+                    }
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-all ${
+                    isOwnProfile
+                      ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 cursor-pointer shadow-2xs'
+                      : 'bg-slate-100 dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700'
+                  }`}
+                  title={isOwnProfile ? "Change preferred language in Settings" : `Preferred Language: ${langOpt.name}`}
+                >
+                  <Globe className="w-3.5 h-3.5 text-indigo-500" />
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                    {langOpt.nativeName}
+                  </span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                    ({langOpt.name})
+                  </span>
+                  {isOwnProfile && (
+                    <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 ml-1 underline underline-offset-2">
+                      Change
+                    </span>
+                  )}
+                </button>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
       {/* Hidden Profile Banner (when currentUser hid profile from this user) */}
       {!isOwnProfile && hiddenProfileFromUserIds.includes(activeProfile.id) && (
-        <div className="mb-6 p-3.5 px-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
+        <div className="mb-6 p-3.5 px-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in ambient-glow">
           <div className="flex items-center gap-2.5 text-rose-300">
             <UserX className="w-4 h-4 text-rose-400 shrink-0" />
             <span>
@@ -475,7 +607,7 @@ export const ProfileView: React.FC = () => {
 
       {/* Own Profile: Hidden Profiles Alert Banner */}
       {isOwnProfile && hiddenProfileFromUserIds.length > 0 && (
-        <div className="mb-6 p-3 px-4 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="mb-6 p-3 px-4 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ambient-glow">
           <div className="flex items-center gap-2 text-zinc-300">
             <UserX className="w-4 h-4 text-rose-400 shrink-0" />
             <span>
@@ -490,7 +622,10 @@ export const ProfileView: React.FC = () => {
               {previewAsRestrictedUser ? 'Exit Preview' : 'Preview Restricted View'}
             </button>
             <button
-              onClick={() => setIsProfileMenuOpen(true)}
+              onClick={() => {
+                setNavActiveTab('settings');
+                navigate('/app/settings');
+              }}
               className="px-3 py-1 rounded-xl bg-lime-400 text-zinc-950 text-xs font-bold hover:bg-lime-300 transition-colors"
             >
               Manage
@@ -501,7 +636,7 @@ export const ProfileView: React.FC = () => {
 
       {/* If previewing as restricted user: show unavailable state */}
       {previewAsRestrictedUser ? (
-        <div className="py-20 text-center space-y-4 max-w-sm mx-auto bg-zinc-950/70 border border-zinc-800 rounded-3xl p-8 my-6 animate-in fade-in">
+        <div className="py-20 text-center space-y-4 max-w-sm mx-auto bg-zinc-950/70 border border-zinc-800 rounded-3xl p-8 my-6 animate-in fade-in ambient-glow">
           <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-400">
             <Lock className="w-7 h-7" />
           </div>
@@ -518,18 +653,45 @@ export const ProfileView: React.FC = () => {
             Exit Restricted Preview
           </button>
         </div>
+      ) : isBlocked ? (
+        <div
+          id="profile-blocked-message-card"
+          className="py-16 px-6 text-center space-y-4 max-w-md mx-auto bg-zinc-950/70 border border-zinc-800 rounded-3xl my-8 animate-in fade-in ambient-glow"
+        >
+          <div className="w-16 h-16 rounded-full bg-rose-500/15 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-400">
+            <Ban className="w-8 h-8" />
+          </div>
+          <div className="space-y-1.5">
+            <h3 className="text-base font-bold text-white">
+              You've blocked @{activeProfile.username}
+            </h3>
+            <p className="text-xs text-zinc-400 leading-relaxed max-w-xs mx-auto">
+              You won't see their posts, reels, or stories in your feed, and they can't message you or find your profile.
+            </p>
+          </div>
+          <div className="pt-2">
+            <button
+              id="profile-blocked-unblock-center-btn"
+              onClick={() => unblockUser(activeProfile.id)}
+              className="px-5 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs transition-colors inline-flex items-center gap-2"
+            >
+              <Ban className="w-4 h-4" />
+              Unblock @{activeProfile.username}
+            </button>
+          </div>
+        </div>
       ) : (
         <>
           {/* Highlights Carousel with Edit & Archive */}
           {activeProfile.highlights && activeProfile.highlights.length > 0 && (
-        <div className="flex items-center gap-4 overflow-x-auto pb-4 mb-6 scrollbar-none">
+        <div className="p-4 md:p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/80 mb-6 flex items-center gap-4 overflow-x-auto scrollbar-none ambient-glow">
           {activeProfile.highlights.map(hl => (
             <div
               key={hl.id}
               className="flex flex-col items-center gap-1.5 flex-shrink-0 cursor-pointer group relative"
             >
               <div
-                onClick={() => showToast(`Opening highlight: ${hl.title}`)}
+                onClick={() => setActiveViewingHighlight(hl)}
                 className="w-[66px] h-[66px] rounded-full p-[2px] bg-zinc-300 dark:bg-zinc-700 group-hover:bg-lime-400 transition-colors"
               >
                 <div className="w-full h-full rounded-full overflow-hidden border-2 border-white dark:border-zinc-900">
@@ -574,8 +736,8 @@ export const ProfileView: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
+                      deleteHighlight(hl.id);
                       setHighlightMenuId(null);
-                      showToast(`Deleted highlight "${hl.title}"`);
                     }}
                     className="w-full px-3 py-1.5 text-left text-rose-400 hover:bg-rose-950/40 flex items-center gap-2"
                   >
@@ -637,7 +799,7 @@ export const ProfileView: React.FC = () => {
               <div
                 key={post.id}
                 id={`profile-post-${post.id}`}
-                className="group relative aspect-square bg-slate-900 overflow-hidden rounded-lg cursor-pointer"
+                className="group relative aspect-square bg-slate-900 overflow-hidden rounded-xl cursor-pointer ambient-glow border border-transparent hover:border-lime-400/40 transition-all"
               >
                 <img
                   src={post.mediaUrls[0]}
@@ -755,8 +917,10 @@ export const ProfileView: React.FC = () => {
           {(userReels.length > 0 ? userReels : reels.slice(0, 3)).map(reel => (
             <div
               key={reel.id}
-              onClick={() => showToast(`Playing Reel: ${reel.caption}`)}
-              className="relative aspect-[9/16] bg-zinc-900 rounded-2xl overflow-hidden cursor-pointer group"
+              onClick={() => {
+                setNavActiveTab('reels');
+              }}
+              className="relative aspect-[9/16] bg-zinc-900 rounded-2xl overflow-hidden cursor-pointer group ambient-glow border border-transparent hover:border-lime-400/40 transition-all"
             >
               <img src={reel.thumbnailUrl} alt={reel.caption} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent p-3 flex flex-col justify-end text-white">
@@ -795,7 +959,7 @@ export const ProfileView: React.FC = () => {
               <div
                 key={post.id}
                 onClick={() => setSelectedPostForModal(post)}
-                className="group relative aspect-square bg-slate-900 overflow-hidden cursor-pointer rounded-lg"
+                className="group relative aspect-square bg-slate-900 overflow-hidden cursor-pointer rounded-xl ambient-glow border border-transparent hover:border-lime-400/40 transition-all"
               >
                 <img src={post.mediaUrls[0]} alt={post.caption} className="w-full h-full object-cover" />
                 <div className="absolute top-2 left-2 p-1 rounded-full bg-black/60 text-lime-400">
@@ -824,7 +988,7 @@ export const ProfileView: React.FC = () => {
             <div
               key={post.id}
               onClick={() => setSelectedPostForModal(post)}
-              className="group relative aspect-square bg-slate-900 overflow-hidden cursor-pointer rounded-lg"
+              className="group relative aspect-square bg-slate-900 overflow-hidden cursor-pointer rounded-xl ambient-glow border border-transparent hover:border-lime-400/40 transition-all"
             >
               <img src={post.mediaUrls[0]} alt={post.caption} className="w-full h-full object-cover" />
               <div className="absolute bottom-2 left-2 p-1 rounded-full bg-black/60 text-white">
@@ -838,7 +1002,7 @@ export const ProfileView: React.FC = () => {
       {/* Edit Post Modal */}
       {editingPostId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4 shadow-2xl">
+          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4 shadow-2xl ambient-glow">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Edit2 className="w-4 h-4 text-lime-400" />
@@ -882,7 +1046,7 @@ export const ProfileView: React.FC = () => {
       {/* Followers / Following List Modal with Privacy & Conceal Buttons */}
       {followListModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
+          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh] ambient-glow">
             {/* Modal Header */}
             <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/60">
               <div className="flex items-center gap-2">
@@ -993,7 +1157,7 @@ export const ProfileView: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-lg">
-                    Your account is governed by Yaawp Inc. Terms of Use, Privacy Policy, Cookie Policy, and Community Guidelines.
+                    Your account is governed by Yaawp Terms of Use, Privacy Policy, Cookie Policy, and Community Guidelines.
                     {termsAgreedTimestamp && (
                       <span className="block mt-0.5 text-[11px] text-slate-400">
                         Agreement active since {new Date(termsAgreedTimestamp).toLocaleDateString()}
@@ -1026,6 +1190,57 @@ export const ProfileView: React.FC = () => {
                   Cookies
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Active Highlight Viewer Modal */}
+      {activeViewingHighlight && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+          <div className="relative w-full max-w-sm aspect-[9/16] max-h-[85vh] bg-black rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between p-4">
+            {/* Top Bar with title and close */}
+            <div className="flex items-center justify-between text-white z-10">
+              <div className="flex items-center gap-2.5">
+                <img
+                  src={activeProfile.avatar}
+                  alt={activeProfile.username}
+                  className="w-8 h-8 rounded-full object-cover ring-2 ring-indigo-500"
+                />
+                <div>
+                  <p className="text-xs font-bold leading-tight">@{activeProfile.username}</p>
+                  <p className="text-[10px] text-white/70">{activeViewingHighlight.title}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveViewingHighlight(null)}
+                className="p-1.5 rounded-full bg-black/40 hover:bg-black/70 text-white transition-colors cursor-pointer"
+                title="Close highlight"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Background Image / Story Media */}
+            <img
+              src={activeViewingHighlight.coverUrl}
+              alt={activeViewingHighlight.title}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+
+            {/* Bottom highlight info */}
+            <div className="relative z-10 p-3 rounded-2xl bg-black/50 backdrop-blur-sm border border-white/10 text-white flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold block">{activeViewingHighlight.title}</span>
+                <span className="text-[10px] text-white/70">Story Highlight</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveViewingHighlight(null)}
+                className="px-3 py-1 rounded-full bg-white text-slate-900 text-xs font-bold hover:bg-white/90"
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>

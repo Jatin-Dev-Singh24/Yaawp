@@ -19,10 +19,21 @@ export interface UserSummary {
   bioSnippet?: string;
 }
 
+export type AvatarAudience = 'everyone' | 'followers' | 'close_friends' | 'custom_users' | 'none';
+
+export interface CustomPfpConfig {
+  url: string;
+  hasNoPfp?: boolean;
+  audience: AvatarAudience;
+  customUsernames?: string[];
+  customUserIds?: string[];
+}
+
 export interface UserProfile extends UserSummary {
   email?: string;
   bio: string;
   website?: string;
+  preferred_language?: string;
   followersCount: number;
   followingCount: number;
   postsCount: number;
@@ -34,6 +45,8 @@ export interface UserProfile extends UserSummary {
   isPrivate?: boolean;
   secondaryAvatar?: string;
   avatarVisibility?: 'everyone' | 'followers' | 'close_friends';
+  pfp1Config?: CustomPfpConfig;
+  pfp2Config?: CustomPfpConfig;
   hiddenFollowerIds?: string[];
   hiddenFollowingIds?: string[];
   isPrivateAccount?: boolean;
@@ -86,6 +99,9 @@ export interface Post {
   allowsRepost?: boolean;
   repostedBy?: UserSummary;
   videoUrl?: string;
+  isTextPost?: boolean;
+  textPostTheme?: 'slate' | 'indigo' | 'emerald' | 'amber' | 'sunset' | 'dark';
+  postType?: 'image' | 'video' | 'text';
   communityId?: string;
   communityName?: string;
   audience?: 'everyone' | 'followers' | 'close_friends' | 'private' | 'community' | 'specific';
@@ -110,6 +126,8 @@ export interface Post {
   };
   allowedEmojis?: string[];
   restrictedEmojis?: string[];
+  isScheduled?: boolean;
+  scheduledPublishTime?: string;
 }
 
 export interface CommunityChannel {
@@ -236,6 +254,20 @@ export interface Challenge {
   communityName?: string;
 }
 
+export interface StoryPollOption {
+  id: string;
+  text: string;
+  votes: number;
+}
+
+export interface StoryPoll {
+  id: string;
+  question: string;
+  options: StoryPollOption[];
+  userVotedOptionId?: string;
+  totalVotes?: number;
+}
+
 export interface Story {
   id: string;
   user: UserSummary;
@@ -248,6 +280,9 @@ export interface Story {
   isArchived?: boolean;
   audience?: 'everyone' | 'close_friends';
   comments?: Comment[];
+  poll?: StoryPoll;
+  isTextStory?: boolean;
+  storyTheme?: string;
 }
 
 export interface Reel {
@@ -262,6 +297,7 @@ export interface Reel {
   isLiked: boolean;
   isSaved: boolean;
   filterClass?: string;
+  comments?: Comment[];
 }
 
 export interface NotificationItem {
@@ -281,13 +317,80 @@ export interface NotificationItem {
 
 export type MessageDeliveryStatus = 'sending' | 'sent' | 'delivered' | 'seen';
 
+export type GameType = 'tictactoe' | 'rps' | 'connect4' | 'dotsandboxes';
+
+export interface GameSession {
+  gameId: string;
+  gameType: GameType;
+  gameTitle: string;
+  hostId: string;
+  hostName: string;
+  opponentId: string;
+  opponentName: string;
+  status: 'invitation' | 'active' | 'completed' | 'declined' | 'expired';
+  currentTurnUserId?: string;
+  winnerId?: string | 'draw';
+  state?: any;
+  lastMoveTimestamp?: number;
+  inviteMessage?: string;
+  createdAt?: number;
+}
+
+export interface PollOption {
+  id: string;
+  text: string;
+  votes: number | string[];
+  voters?: string[];
+}
+
+export interface PollData {
+  id?: string;
+  pollId?: string;
+  question: string;
+  options: PollOption[];
+  totalVotes: number;
+  isClosed?: boolean;
+  isMultipleChoice?: boolean;
+  createdAt?: number;
+}
+
+export interface ContactData {
+  id?: string;
+  name: string;
+  username?: string;
+  phone?: string;
+  email?: string;
+  avatar?: string;
+}
+
+export interface LocationData {
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface AudioData {
+  title: string;
+  artist: string;
+  duration: number;
+  audioUrl: string;
+}
+
+export interface DocumentData {
+  fileName: string;
+  fileSize: string;
+  fileType: string;
+  fileUrl?: string;
+}
+
 export interface ChatMessage {
   id: string;
   senderId: string;
   text: string;
   timestamp: string;
   mediaUrl?: string;
-  mediaType?: 'image' | 'video' | 'file';
+  mediaType?: 'image' | 'video' | 'file' | 'audio' | 'contact' | 'location' | 'poll' | 'game';
   fileName?: string;
   isLiked?: boolean;
   status?: MessageDeliveryStatus;
@@ -304,6 +407,20 @@ export interface ChatMessage {
   }[];
   isVoice?: boolean;
   voiceDurationSeconds?: number;
+  documentData?: DocumentData;
+  audioData?: AudioData;
+  contactData?: ContactData;
+  locationData?: LocationData;
+  pollData?: PollData;
+  gameSession?: GameSession;
+  supportBotData?: {
+    suggestedActions?: {
+      label: string;
+      actionKey: 'open_privacy' | 'open_security' | 'open_secret_code' | 'open_permissions' | 'open_create_post' | 'explore_feed' | 'open_profile_edit';
+      icon?: string;
+    }[];
+    quickReplies?: string[];
+  };
 }
 
 export interface SecurityAuditLog {
@@ -329,6 +446,26 @@ export interface CommunityJoinRequest {
   message?: string;
 }
 
+export interface ChatCustomList {
+  id: string;
+  name: string;
+  color?: string;
+  icon?: string;
+  createdAt: number;
+}
+
+export interface GroupPendingJoinRequest {
+  id: string;
+  user: UserSummary;
+  requestedAt: string;
+}
+
+export interface HiddenVaultConfig {
+  hideChat: boolean;
+  hideStories: boolean;
+  hidePosts: boolean;
+}
+
 export interface ChatConversation {
   id: string;
   participant: UserSummary;
@@ -345,13 +482,32 @@ export interface ChatConversation {
   isTyping?: boolean;
   isArchived?: boolean;
   isMuted?: boolean;
+  isPinned?: boolean;
+  listIds?: string[];
   isGroup?: boolean;
   groupName?: string;
   groupAvatar?: string;
+  groupDescription?: string;
   groupMembers?: UserSummary[];
   isGroupPublic?: boolean;
   isHiddenChat?: boolean;
+  hiddenVaultConfig?: HiddenVaultConfig;
+  ownerId?: string;
+  adminIds?: string[];
+  groupMessagingPermission?: 'all' | 'admins_only';
+  restrictedMessengerIds?: string[];
+  pendingJoinRequests?: GroupPendingJoinRequest[];
+  inviteCode?: string;
+  wallpaper?: {
+    type: 'gradient' | 'shape' | 'scenery' | 'custom';
+    value: string; // CSS gradient, image URL, or pattern ID
+    name?: string;
+  };
+  chatThemeColor?: string;
 }
+
+export type AppPermissionType = 'camera' | 'microphone' | 'location' | 'storage';
+export type AppPermissionStatus = 'always' | 'session' | 'denied' | 'prompt';
 
 export interface FilterPreset {
   id: string;
@@ -369,9 +525,11 @@ export interface NewAccountRegistration {
   birthday: string;
   password?: string;
   avatar?: string;
+  preferred_language?: string;
   agreedToTerms: boolean;
   agreedToPrivacy: boolean;
   agreedToCookies?: boolean;
+  agreedToCommunity?: boolean;
 }
 
 export type FeedMode =
@@ -446,4 +604,40 @@ export interface PresenceStatus {
   label: string;
   detail?: string;
   updatedAt: string;
+}
+
+export interface ScheduledChatMessage {
+  id: string;
+  conversationId: string;
+  senderId?: string;
+  recipientName?: string;
+  text: string;
+  scheduledFor?: number; // unix timestamp ms
+  scheduledForMs?: number;
+  createdAt: number;
+}
+
+export interface PostDraft {
+  id: string;
+  createdAt?: number;
+  updatedAt?: number;
+  savedAt?: number;
+  shareTarget?: 'post' | 'story';
+  postCategory?: 'media' | 'text';
+  category?: 'media' | 'text';
+  caption: string;
+  textPostContent?: string;
+  textPostTheme?: 'slate' | 'indigo' | 'emerald' | 'amber' | 'sunset' | 'dark' | string;
+  selectedImage?: string;
+  mediaUrl?: string;
+  location?: string;
+  audience?: string;
+  selectedFilter?: string;
+  storyPoll?: StoryPoll;
+  hasStoryPoll?: boolean;
+  storyPollQuestion?: string;
+  storyPollOptions?: string[];
+  isScheduling?: boolean;
+  scheduledDate?: string;
+  scheduledTime?: string;
 }

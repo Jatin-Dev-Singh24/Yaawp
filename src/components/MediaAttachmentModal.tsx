@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Image as ImageIcon, Film, FileText, Send, Check, Loader2 } from 'lucide-react';
+import { X, Image as ImageIcon, Film, FileText, Send, Check, Loader2, Zap } from 'lucide-react';
 import { uploadMediaToSupabase } from '../lib/supabaseStorage';
+import { convertImageToWebP, extractVideoThumbnailWebP } from '../utils/mediaConverter';
 
 interface MediaAttachmentModalProps {
   isOpen: boolean;
@@ -20,9 +21,10 @@ export const MediaAttachmentModal: React.FC<MediaAttachmentModalProps> = ({
   const [selectedUrl, setSelectedUrl] = useState<string>(
     'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80'
   );
-  const [fileName, setFileName] = useState('kodak_portra_400.jpg');
+  const [fileName, setFileName] = useState('kodak_portra_400.webp');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
 
   if (!isOpen) return null;
 
@@ -94,20 +96,38 @@ export const MediaAttachmentModal: React.FC<MediaAttachmentModalProps> = ({
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      const fakeUrl = URL.createObjectURL(file);
-      setSelectedUrl(fakeUrl);
-      setFileName(file.name);
+    if (!file) return;
+
+    setIsConverting(true);
+    try {
       if (file.type.startsWith('video/')) {
         setActiveType('video');
+        const fakeUrl = URL.createObjectURL(file);
+        setSelectedUrl(fakeUrl);
+        setFileName(file.name);
+        setSelectedFile(file);
       } else if (file.type.startsWith('image/')) {
         setActiveType('image');
+        // Convert any image (PNG, JPG, JPEG, GIF, SVG, BMP) to WebP format
+        const converted = await convertImageToWebP(file);
+        setSelectedFile(converted.file);
+        setSelectedUrl(converted.dataUrl);
+        setFileName(converted.file.name);
       } else {
         setActiveType('file');
+        setSelectedFile(file);
+        setSelectedUrl(URL.createObjectURL(file));
+        setFileName(file.name);
       }
+    } catch (err) {
+      console.warn('Error converting file:', err);
+      setSelectedFile(file);
+      setSelectedUrl(URL.createObjectURL(file));
+      setFileName(file.name);
+    } finally {
+      setIsConverting(false);
     }
   };
 
@@ -278,9 +298,16 @@ export const MediaAttachmentModal: React.FC<MediaAttachmentModalProps> = ({
           )}
 
           {/* Custom File Upload Button */}
-          <div className="pt-2">
+          <div className="pt-2 space-y-1.5">
             <label className="w-full py-2.5 border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-400/50 rounded-xl flex items-center justify-center gap-2 cursor-pointer text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
-              <span>Choose custom file from device...</span>
+              {isConverting ? (
+                <span className="flex items-center gap-1.5 text-indigo-500 font-medium">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Processing media...
+                </span>
+              ) : (
+                <span>Choose custom file from device...</span>
+              )}
               <input type="file" className="hidden" onChange={handleFileUpload} />
             </label>
           </div>

@@ -22,13 +22,13 @@ export interface LegalDocument {
 export const YAAWP_TERMS_OF_USE: LegalDocument = {
   id: 'terms',
   title: 'Yaawp Terms of Use',
-  metaSubtitle: 'Yaawp Inc. Terms of Service',
+  metaSubtitle: 'Yaawp Terms of Service',
   lastUpdated: 'January 1, 2026',
   effectiveDate: 'January 1, 2026',
   introduction: [
     'Welcome to Yaawp!',
     'These Terms of Use (or "Terms") govern your use of Yaawp, except where we expressly state that separate terms apply, and provide information about the Yaawp Service (the "Service"), outlined below. When you create a Yaawp account or use Yaawp, you agree to these Terms.',
-    'The Yaawp Service is provided to you by Yaawp Inc. These Terms of Use therefore constitute an agreement between you and Yaawp Inc.'
+    'The Yaawp Service is provided to you by Yaawp. These Terms of Use therefore constitute an agreement between you and Yaawp.'
   ],
   sections: [
     {
@@ -39,7 +39,7 @@ export const YAAWP_TERMS_OF_USE: LegalDocument = {
         '• Offering personalized opportunities to create, connect, communicate, discover, and share: People are different. We want to strengthen your relationships through shared experiences you actually care about. So we build systems that try to understand who and what you and others care about, and use that information to help you create, find, view, and share content that is relevant to you and others.',
         '• Fostering a positive, inclusive, and safe environment: We develop and use tools and offer resources to our community members that help to make their experiences positive and inclusive, including when we think they might need help. We also have teams and systems that work to combat abuse and violations of our Terms and policies, as well as harmful and deceptive behavior.',
         '• Developing and using technologies that help us consistently serve our growing community: Organizing and analyzing information for our growing community is central to our Service. A big part of our Service is creating and using cutting-edge technologies that help us personalize, protect, and improve our Service on an incredibly large scale for a broad global community.',
-        '• Ensuring a stable global infrastructure for our Service: To provide our global Service, we must store and transfer data across our systems around the world, including outside of your country of residence. This infrastructure may be owned or operated by Yaawp Inc. or its affiliates.'
+        '• Ensuring a stable global infrastructure for our Service: To provide our global Service, we must store and transfer data across our systems around the world, including outside of your country of residence. This infrastructure may be owned or operated by Yaawp or its affiliates.'
       ]
     },
     {
@@ -262,7 +262,7 @@ export const YAAWP_PRIVACY_POLICY: LegalDocument = {
       id: 'global-transfers',
       title: '5. How Do We Operate and Transfer Data as Part of Global Services?',
       content: [
-        'We share information globally, both internally within Yaawp Inc. and externally with our partners and with those you connect and share with around the world. Your information may be transferred or transmitted to, or stored and processed in, other countries outside of where you live for the purposes as described in this policy.'
+        'We share information globally, both internally within Yaawp and externally with our partners and with those you connect and share with around the world. Your information may be transferred or transmitted to, or stored and processed in, other countries outside of where you live for the purposes as described in this policy.'
       ]
     }
   ]

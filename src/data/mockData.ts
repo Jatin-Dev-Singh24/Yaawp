@@ -56,6 +56,7 @@ export const CURRENT_USER: UserProfile = {
   isVerified: true,
   bio: 'Exploring aesthetic intersections of lens, code & thought. Analog photographer, generative explorer.',
   website: 'https://jatindev.com',
+  preferred_language: 'en',
   followersCount: 14280,
   followingCount: 682,
   postsCount: 24,
@@ -246,7 +247,16 @@ export const INITIAL_STORIES: Story[] = [
     mediaUrl: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1080&h=1920&q=85',
     timestamp: '1h ago',
     seen: false,
-    caption: 'Morning light in the studio ☕'
+    caption: 'Morning light in the studio ☕',
+    poll: {
+      id: 'poll_elena_1',
+      question: 'Which palette for the new exhibition? 🎨',
+      options: [
+        { id: 'opt_1', text: 'Warm Terracotta 🏺', votes: 46 },
+        { id: 'opt_2', text: 'Cerulean Blue 🌊', votes: 54 }
+      ],
+      totalVotes: 100
+    }
   },
   {
     id: 'story_kai',
@@ -649,6 +659,116 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
 
 export const INITIAL_CONVERSATIONS: ChatConversation[] = [
   {
+    id: 'conv_group_visual_guild',
+    participant: {
+      id: 'group_visual_guild',
+      username: 'light_collective',
+      name: 'Lens & Light Collective',
+      avatar: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=400&h=400&q=80'
+    },
+    isGroup: true,
+    groupName: 'Lens & Light Collective',
+    groupAvatar: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=400&h=400&q=80',
+    groupDescription: 'Private collective for visual creators, photographers & filmmakers. Discussing natural lighting, editorial shoots, and upcoming gallery collabs.',
+    isGroupPublic: false,
+    ownerId: CURRENT_USER.id,
+    adminIds: [CURRENT_USER.id, USERS.elena_art.id],
+    groupMessagingPermission: 'all',
+    restrictedMessengerIds: [],
+    inviteCode: 'light-collective',
+    pendingJoinRequests: [
+      {
+        id: 'req_join_1',
+        user: USERS.sophia_vogue,
+        requestedAt: '12m ago'
+      },
+      {
+        id: 'req_join_2',
+        user: USERS.chloe_botanicals,
+        requestedAt: '1h ago'
+      }
+    ],
+    groupMembers: [
+      {
+        id: CURRENT_USER.id,
+        username: CURRENT_USER.username,
+        name: CURRENT_USER.name,
+        avatar: CURRENT_USER.avatar,
+        isVerified: CURRENT_USER.isVerified
+      },
+      USERS.elena_art,
+      USERS.wanderlust_kai,
+      USERS.david_urban
+    ],
+    lastMessage: 'Elena: The new studio keycard is ready for everyone!',
+    lastMessageTime: '1:15 PM',
+    unreadCount: 0,
+    isOnline: true,
+    messages: [
+      {
+        id: 'msg_g1',
+        senderId: 'system',
+        text: 'Lens & Light Collective created by Jatin Dev Singh. Group set to Private.',
+        timestamp: '11:00 AM'
+      },
+      {
+        id: 'msg_g2',
+        senderId: CURRENT_USER.id,
+        text: 'Welcome everyone! Excited to organize our upcoming studio session here ✨',
+        timestamp: '11:05 AM',
+        status: 'seen'
+      },
+      {
+        id: 'msg_g3',
+        senderId: USERS.elena_art.id,
+        text: 'The new studio keycard is ready for everyone! Let me know if you need early access.',
+        timestamp: '1:15 PM'
+      }
+    ]
+  },
+  {
+    id: 'conv_group_tokyo_walk',
+    participant: {
+      id: 'group_tokyo_walk',
+      username: 'tokyo_walk',
+      name: 'Tokyo Street Nocturnes',
+      avatar: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=400&h=400&q=80'
+    },
+    isGroup: true,
+    groupName: 'Tokyo Street Nocturnes',
+    groupAvatar: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=400&h=400&q=80',
+    groupDescription: 'Public group sharing urban exploration locations, neon lighting spots, and weekend street walks around Shinjuku & Shibuya.',
+    isGroupPublic: true,
+    ownerId: USERS.david_urban.id,
+    adminIds: [USERS.david_urban.id],
+    groupMessagingPermission: 'all',
+    restrictedMessengerIds: [],
+    inviteCode: 'tokyo-night',
+    groupMembers: [
+      USERS.david_urban,
+      {
+        id: CURRENT_USER.id,
+        username: CURRENT_USER.username,
+        name: CURRENT_USER.name,
+        avatar: CURRENT_USER.avatar,
+        isVerified: CURRENT_USER.isVerified
+      },
+      USERS.wanderlust_kai
+    ],
+    lastMessage: 'David: Gathering in front of Omoide Yokocho at 8 PM tonight!',
+    lastMessageTime: 'Yesterday',
+    unreadCount: 0,
+    isOnline: true,
+    messages: [
+      {
+        id: 'msg_t1',
+        senderId: USERS.david_urban.id,
+        text: 'Gathering in front of Omoide Yokocho at 8 PM tonight! Bring rain gear just in case 🌧️',
+        timestamp: 'Yesterday 6:30 PM'
+      }
+    ]
+  },
+  {
     id: 'conv_elena',
     participant: USERS.elena_art,
     lastMessage: 'Let me know which lens you used for that Copenhagen series!',
@@ -656,6 +776,7 @@ export const INITIAL_CONVERSATIONS: ChatConversation[] = [
     unreadCount: 1,
     isOnline: true,
     isRecipientInChat: true,
+    listIds: ['list_school', 'list_friends'],
     lastSeenByRecipient: {
       messageId: 'm2',
       timestamp: '12:38 PM'
@@ -683,14 +804,16 @@ export const INITIAL_CONVERSATIONS: ChatConversation[] = [
       }
     ]
   },
+
   {
     id: 'conv_sophia',
     participant: USERS.sophia_vogue,
-    lastMessage: 'Let’s definitely lock in the shoot details for next Friday!',
-    lastMessageTime: '10:14 AM',
-    unreadCount: 0,
+    lastMessage: 'Are we still good for the studio shoot this Friday?',
+    lastMessageTime: '10:22 AM',
+    unreadCount: 2,
     isOnline: true,
     isRecipientInChat: false,
+    listIds: ['list_family'],
     lastSeenByRecipient: {
       messageId: 'm_s2',
       timestamp: '10:15 AM'
@@ -709,6 +832,18 @@ export const INITIAL_CONVERSATIONS: ChatConversation[] = [
         timestamp: '10:14 AM',
         status: 'seen',
         seenAt: '10:15 AM'
+      },
+      {
+        id: 'm_s3',
+        senderId: 'user_sophia',
+        text: 'Are we still good for the studio shoot this Friday?',
+        timestamp: '10:20 AM'
+      },
+      {
+        id: 'm_s4',
+        senderId: 'user_sophia',
+        text: 'I booked the lighting equipment as well 💡',
+        timestamp: '10:22 AM'
       }
     ]
   },
@@ -717,7 +852,7 @@ export const INITIAL_CONVERSATIONS: ChatConversation[] = [
     participant: USERS.wanderlust_kai,
     lastMessage: 'Sent you the pin for that Amalfi lookout cliff 📍',
     lastMessageTime: 'Yesterday',
-    unreadCount: 0,
+    unreadCount: 1,
     isOnline: false,
     isRecipientInChat: false,
     lastSeenByRecipient: {

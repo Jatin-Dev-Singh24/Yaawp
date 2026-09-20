@@ -16,7 +16,11 @@ import {
   FileSpreadsheet,
   Link2,
   RefreshCw,
-  Bell
+  Bell,
+  Mail,
+  Check,
+  Send,
+  HelpCircle
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -26,6 +30,7 @@ export const SecurityModal: React.FC = () => {
     setIsSecurityModalOpen,
     chatPasscode,
     setChatPasscode,
+    verifyPreviousPasscode,
     failedLoginAttempts,
     lockoutUntil,
     failedLoginsAlert,
@@ -35,83 +40,214 @@ export const SecurityModal: React.FC = () => {
     deleteAccountPermanently,
     changePassword,
     twoFactorEnabled,
-    setTwoFactorEnabled,
+    enableTwoFactorWithPassword,
+    changeTwoFactorPassword,
+    disableTwoFactorWithPassword,
+    resetTwoFactorViaEmail,
     privateMediaSignedUrlsEnabled,
     setPrivateMediaSignedUrlsEnabled,
+    currentUser,
     showToast
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'passcode' | 'password' | 'audit' | 'privacy' | 'lockout'>('passcode');
 
-  // Password change state
-  const [currentPw, setCurrentPw] = useState('');
-  const [newPw, setNewPw] = useState('');
-  const [confirmPw, setConfirmPw] = useState('');
-  const [showCurrentPw, setShowCurrentPw] = useState(false);
-  const [showNewPw, setShowNewPw] = useState(false);
-
   // Chat passcode state
+  const [passcodeMode, setPasscodeMode] = useState<'update' | 'disable' | 'forgot'>('update');
+  const [previousPin, setPreviousPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
+  const [pinError, setPinError] = useState('');
+  
+  // Passcode forgot flow
+  const [passcodeResetCode, setPasscodeResetCode] = useState('');
+  const [enteredPasscodeCode, setEnteredPasscodeCode] = useState('');
+  const [isPasscodeCodeSent, setIsPasscodeCodeSent] = useState(false);
 
-  // Password strength calculation
-  const passwordStrength = useMemo(() => {
-    if (!newPw) return { score: 0, label: 'None', color: 'bg-zinc-700' };
-    let score = 0;
-    if (newPw.length >= 8) score += 1;
-    if (newPw.length >= 12) score += 1;
-    if (/[a-z]/.test(newPw) && /[A-Z]/.test(newPw)) score += 1;
-    if (/\d/.test(newPw)) score += 1;
-    if (/[^a-zA-Z0-9]/.test(newPw)) score += 1;
+  // 2FA state
+  const [twoFaMode, setTwoFaMode] = useState<'change' | 'disable' | 'forgot'>('change');
+  const [initialTwoFaPw, setInitialTwoFaPw] = useState('');
+  const [initialTwoFaConfirm, setInitialTwoFaConfirm] = useState('');
+  const [showInitialTwoFaPw, setShowInitialTwoFaPw] = useState(false);
 
-    if (score <= 2) return { score, label: 'Weak', color: 'bg-rose-500' };
-    if (score <= 3) return { score, label: 'Fair', color: 'bg-amber-500' };
-    if (score === 4) return { score, label: 'Good', color: 'bg-lime-500' };
-    return { score, label: 'Strong (Exceeds Policy)', color: 'bg-lime-400' };
-  }, [newPw]);
+  const [currentTwoFaPw, setCurrentTwoFaPw] = useState('');
+  const [newTwoFaPw, setNewTwoFaPw] = useState('');
+  const [confirmNewTwoFaPw, setConfirmNewTwoFaPw] = useState('');
+  const [showCurrentTwoFa, setShowCurrentTwoFa] = useState(false);
+  const [showNewTwoFa, setShowNewTwoFa] = useState(false);
+
+  // 2FA forgot flow
+  const [twoFaResetCode, setTwoFaResetCode] = useState('');
+  const [enteredTwoFaCode, setEnteredTwoFaCode] = useState('');
+  const [isTwoFaCodeSent, setIsTwoFaCodeSent] = useState(false);
 
   if (!isSecurityModalOpen) return null;
 
-  const handleSetPasscode = (e: React.FormEvent) => {
+  // --- Chat Passcode Handlers ---
+  const handleSetNewPasscode = (e: React.FormEvent) => {
     e.preventDefault();
+    setPinError('');
     if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
-      showToast('Passcode must be exactly 4 digits');
+      setPinError('Passcode must be exactly 4 digits');
       return;
     }
     if (newPin !== confirmPin) {
-      showToast('PIN codes do not match');
+      setPinError('PIN codes do not match');
       return;
     }
     setChatPasscode(newPin);
     setNewPin('');
     setConfirmPin('');
-    showToast('Chat Passcode Lock updated successfully');
+    showToast('Chat Passcode Lock configured successfully');
   };
 
-  const handleRemovePasscode = () => {
-    setChatPasscode(null);
-    showToast('Chat Passcode Lock removed');
-  };
-
-  const handleChangePasswordSubmit = (e: React.FormEvent) => {
+  const handleUpdatePasscode = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPw) {
-      showToast('Enter your current password');
+    setPinError('');
+    if (!verifyPreviousPasscode(previousPin)) {
+      setPinError('Incorrect previous passcode. Verify your PIN or use Forgot Passcode.');
       return;
     }
-    if (passwordStrength.score < 2) {
-      showToast('Please choose a stronger password');
+    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+      setPinError('New passcode must be exactly 4 digits');
       return;
     }
-    if (newPw !== confirmPw) {
+    if (newPin !== confirmPin) {
+      setPinError('New PIN codes do not match');
+      return;
+    }
+    setChatPasscode(newPin);
+    setPreviousPin('');
+    setNewPin('');
+    setConfirmPin('');
+    showToast('Chat Passcode updated successfully');
+  };
+
+  const handleDisablePasscode = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinError('');
+    if (!verifyPreviousPasscode(previousPin)) {
+      setPinError('Incorrect previous passcode. Cannot disable lock without valid PIN.');
+      return;
+    }
+    setChatPasscode(null);
+    setPreviousPin('');
+    showToast('Chat Passcode Lock disabled');
+  };
+
+  const handleSendPasscodeOtp = () => {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setPasscodeResetCode(code);
+    setIsPasscodeCodeSent(true);
+    showToast(`Verification code sent to registered email: ${code}`);
+  };
+
+  const handleResetPasscodeViaEmail = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinError('');
+    if (enteredPasscodeCode !== passcodeResetCode) {
+      setPinError('Invalid 6-digit email verification code');
+      return;
+    }
+    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+      setPinError('Passcode must be exactly 4 digits');
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setPinError('Passcodes do not match');
+      return;
+    }
+    setChatPasscode(newPin);
+    setEnteredPasscodeCode('');
+    setPasscodeResetCode('');
+    setIsPasscodeCodeSent(false);
+    setNewPin('');
+    setConfirmPin('');
+    setPasscodeMode('update');
+    showToast('Chat passcode successfully reset via email verification!');
+  };
+
+  // --- 2FA Handlers ---
+  const handleEnableInitial2FA = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!initialTwoFaPw || initialTwoFaPw.length < 4) {
+      showToast('2FA Password must be at least 4 characters');
+      return;
+    }
+    if (initialTwoFaPw !== initialTwoFaConfirm) {
+      showToast('2FA Passwords do not match');
+      return;
+    }
+    const success = enableTwoFactorWithPassword(initialTwoFaPw);
+    if (success) {
+      setInitialTwoFaPw('');
+      setInitialTwoFaConfirm('');
+    }
+  };
+
+  const handleChange2FAPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentTwoFaPw) {
+      showToast('Please enter your current 2FA password');
+      return;
+    }
+    if (!newTwoFaPw || newTwoFaPw.length < 4) {
+      showToast('New 2FA password must be at least 4 characters');
+      return;
+    }
+    if (newTwoFaPw !== confirmNewTwoFaPw) {
       showToast('New passwords do not match');
       return;
     }
-    const success = changePassword(currentPw, newPw);
+    const success = changeTwoFactorPassword(currentTwoFaPw, newTwoFaPw);
     if (success) {
-      setCurrentPw('');
-      setNewPw('');
-      setConfirmPw('');
+      setCurrentTwoFaPw('');
+      setNewTwoFaPw('');
+      setConfirmNewTwoFaPw('');
+    }
+  };
+
+  const handleDisable2FA = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentTwoFaPw) {
+      showToast('Enter your current 2FA password to disable');
+      return;
+    }
+    const success = disableTwoFactorWithPassword(currentTwoFaPw);
+    if (success) {
+      setCurrentTwoFaPw('');
+    }
+  };
+
+  const handleSend2FAOtp = () => {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setTwoFaResetCode(code);
+    setIsTwoFaCodeSent(true);
+    showToast(`Verification code sent to registered email: ${code}`);
+  };
+
+  const handleReset2FAViaEmail = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (enteredTwoFaCode !== twoFaResetCode) {
+      showToast('Invalid 6-digit email verification code');
+      return;
+    }
+    if (!newTwoFaPw || newTwoFaPw.length < 4) {
+      showToast('New 2FA password must be at least 4 characters');
+      return;
+    }
+    if (newTwoFaPw !== confirmNewTwoFaPw) {
+      showToast('Passwords do not match');
+      return;
+    }
+    const success = resetTwoFactorViaEmail(enteredTwoFaCode, newTwoFaPw);
+    if (success) {
+      setEnteredTwoFaCode('');
+      setTwoFaResetCode('');
+      setIsTwoFaCodeSent(false);
+      setNewTwoFaPw('');
+      setConfirmNewTwoFaPw('');
+      setTwoFaMode('change');
     }
   };
 
@@ -121,45 +257,38 @@ export const SecurityModal: React.FC = () => {
     : 0;
 
   return (
-    <div
-      id="security-suite-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 md:p-6"
-    >
-      <div className="w-full max-w-2xl bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="p-4 px-5 border-b border-zinc-800/80 flex items-center justify-between bg-zinc-900/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+      <div className="relative w-full max-w-2xl bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Modal Header */}
+        <div className="p-4 px-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60">
           <div className="flex items-center gap-2.5">
-            <span className="p-2 rounded-xl bg-lime-400/10 text-lime-400 border border-lime-400/20">
+            <div className="p-2 rounded-xl bg-lime-400/10 text-lime-400 border border-lime-400/20">
               <Shield className="w-5 h-5" />
-            </span>
+            </div>
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                Security & Privacy Center
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-lime-400 font-mono">
-                  AES-256 / RLS
+                Yaawp Security Suite
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-lime-400 font-bold border border-lime-400/20">
+                  ISO-27001
                 </span>
               </h3>
-              <p className="text-[11px] text-zinc-400">
-                End-to-end chat lock, audit logs, and account protections
-              </p>
+              <p className="text-xs text-zinc-400">Zero-knowledge chat protection, 2FA, and authentication audit</p>
             </div>
           </div>
-
           <button
             onClick={() => setIsSecurityModalOpen(false)}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Failed Logins Alert Banner if Spike Detected */}
+        {/* Failed Logins Alert Banner */}
         {failedLoginsAlert && (
           <div className="bg-amber-950/40 border-b border-amber-800/60 p-3 px-5 flex items-start gap-2.5 text-amber-200 text-xs">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <span className="font-bold text-amber-300">Security Alert:</span> Abnormal login failures detected.
-              Daily attempt limit is monitored to prevent brute-force attacks.
+              <span className="font-bold text-amber-300">Security Alert:</span> Abnormal login failures detected. Daily attempt limit is monitored to prevent brute-force attacks.
             </div>
           </div>
         )}
@@ -178,7 +307,7 @@ export const SecurityModal: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg transition-colors shrink-0 ${
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg transition-colors shrink-0 cursor-pointer ${
                   activeTab === tab.id
                     ? 'text-lime-400 border-b-2 border-lime-400 bg-zinc-800/60'
                     : 'text-zinc-400 hover:text-zinc-200'
@@ -224,175 +353,606 @@ export const SecurityModal: React.FC = () => {
                   When enabled, entering your Messages tab requires your 4-digit PIN. Protects confidential threads, photos, and voice notes from casual snooping.
                 </p>
 
-                {chatPasscode && (
-                  <div className="pt-2">
-                    <button
-                      onClick={handleRemovePasscode}
-                      className="px-3 py-1.5 rounded-lg bg-rose-950/60 border border-rose-800 text-rose-300 text-xs font-semibold hover:bg-rose-900 transition-colors"
-                    >
-                      Disable Chat Passcode
-                    </button>
+                {pinError && (
+                  <div className="p-2.5 rounded-lg bg-rose-950/40 border border-rose-800/60 text-rose-300 text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                    <span>{pinError}</span>
                   </div>
                 )}
               </div>
 
-              {/* Set or Change PIN Form */}
-              <form onSubmit={handleSetPasscode} className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-3">
-                <h5 className="text-xs font-bold text-zinc-200">
-                  {chatPasscode ? 'Update 4-Digit Passcode' : 'Set New 4-Digit Passcode'}
-                </h5>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] text-zinc-400 block mb-1">New 4-digit PIN</label>
-                    <input
-                      type="password"
-                      maxLength={4}
-                      pattern="[0-9]*"
-                      inputMode="numeric"
-                      value={newPin}
-                      onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}
-                      placeholder="••••"
-                      className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-center tracking-widest text-sm text-lime-400 font-mono focus:outline-none focus:ring-1 focus:ring-lime-400"
-                    />
+              {/* Case 1: If Chat Lock is NOT configured yet */}
+              {!chatPasscode ? (
+                <form onSubmit={handleSetNewPasscode} className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-3">
+                  <h5 className="text-xs font-bold text-zinc-200">Set New 4-Digit Passcode</h5>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] text-zinc-400 block mb-1">Set 4-digit PIN</label>
+                      <input
+                        type="password"
+                        maxLength={4}
+                        pattern="[0-9]*"
+                        inputMode="numeric"
+                        value={newPin}
+                        onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}
+                        placeholder="••••"
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-center tracking-widest text-sm text-lime-400 font-mono focus:outline-none focus:ring-1 focus:ring-lime-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-zinc-400 block mb-1">Confirm PIN</label>
+                      <input
+                        type="password"
+                        maxLength={4}
+                        pattern="[0-9]*"
+                        inputMode="numeric"
+                        value={confirmPin}
+                        onChange={e => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                        placeholder="••••"
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-center tracking-widest text-sm text-lime-400 font-mono focus:outline-none focus:ring-1 focus:ring-lime-400"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[11px] text-zinc-400 block mb-1">Confirm PIN</label>
-                    <input
-                      type="password"
-                      maxLength={4}
-                      pattern="[0-9]*"
-                      inputMode="numeric"
-                      value={confirmPin}
-                      onChange={e => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                      placeholder="••••"
-                      className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-center tracking-widest text-sm text-lime-400 font-mono focus:outline-none focus:ring-1 focus:ring-lime-400"
-                    />
-                  </div>
-                </div>
 
-                <button
-                  type="submit"
-                  disabled={newPin.length !== 4 || confirmPin.length !== 4}
-                  className="px-4 py-2 rounded-lg bg-lime-400 text-zinc-950 font-bold text-xs hover:bg-lime-300 disabled:opacity-50 transition-colors cursor-pointer"
-                >
-                  Save Chat PIN
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* TAB 2: Password & 2FA */}
-          {activeTab === 'password' && (
-            <div className="space-y-4">
-              {/* 2FA Reminder */}
-              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-lime-400/10 text-lime-400">
-                    <Smartphone className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-white">Two-Factor Reminders (2FA)</h5>
-                    <p className="text-[11px] text-zinc-400">Requires authenticator verification on unknown logins</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setTwoFactorEnabled(!twoFactorEnabled);
-                    showToast(twoFactorEnabled ? '2FA disabled' : '2FA activated! Reminders enabled.');
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                    twoFactorEnabled
-                      ? 'bg-lime-400 text-zinc-950 hover:bg-lime-300'
-                      : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                  }`}
-                >
-                  {twoFactorEnabled ? 'Active' : 'Enable'}
-                </button>
-              </div>
-
-              {/* Password Change Form */}
-              <form onSubmit={handleChangePasswordSubmit} className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-3">
-                <h5 className="text-xs font-bold text-zinc-200">Change Account Password</h5>
-
-                <div>
-                  <label className="text-[11px] text-zinc-400 block mb-1">Current Password</label>
-                  <div className="relative">
-                    <input
-                      type={showCurrentPw ? 'text' : 'password'}
-                      value={currentPw}
-                      onChange={e => setCurrentPw(e.target.value)}
-                      placeholder="Current password"
-                      className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-lime-400 pr-9"
-                    />
+                  <button
+                    type="submit"
+                    disabled={newPin.length !== 4 || confirmPin.length !== 4}
+                    className="px-4 py-2 rounded-lg bg-lime-400 text-zinc-950 font-bold text-xs hover:bg-lime-300 disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    Enable Chat PIN Lock
+                  </button>
+                </form>
+              ) : (
+                /* Case 2: Chat Lock IS active -> Require previous passcode to update or disable, plus forgot passcode method */
+                <div className="space-y-3">
+                  {/* Mode switcher */}
+                  <div className="flex items-center gap-2 p-1 bg-zinc-900 rounded-lg border border-zinc-800 text-xs">
                     <button
                       type="button"
-                      onClick={() => setShowCurrentPw(!showCurrentPw)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                      onClick={() => { setPasscodeMode('update'); setPinError(''); }}
+                      className={`flex-1 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                        passcodeMode === 'update' ? 'bg-zinc-800 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
+                      }`}
                     >
-                      {showCurrentPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      Change Passcode
                     </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] text-zinc-400 block mb-1">New Password</label>
-                  <div className="relative">
-                    <input
-                      type={showNewPw ? 'text' : 'password'}
-                      value={newPw}
-                      onChange={e => setNewPw(e.target.value)}
-                      placeholder="Minimum 8 characters with numbers & symbols"
-                      className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-lime-400 pr-9"
-                    />
                     <button
                       type="button"
-                      onClick={() => setShowNewPw(!showNewPw)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                      onClick={() => { setPasscodeMode('disable'); setPinError(''); }}
+                      className={`flex-1 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                        passcodeMode === 'disable' ? 'bg-zinc-800 text-rose-300 shadow-xs' : 'text-zinc-400 hover:text-rose-300'
+                      }`}
                     >
-                      {showNewPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      Disable Lock
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setPasscodeMode('forgot'); setPinError(''); }}
+                      className={`flex-1 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                        passcodeMode === 'forgot' ? 'bg-zinc-800 text-amber-300 shadow-xs' : 'text-zinc-400 hover:text-amber-300'
+                      }`}
+                    >
+                      Forgot Passcode?
                     </button>
                   </div>
 
-                  {/* Password Strength Meter */}
-                  {newPw && (
-                    <div className="mt-2 space-y-1">
-                      <div className="flex items-center justify-between text-[10px]">
-                        <span className="text-zinc-400">Password Strength:</span>
-                        <span className="font-semibold text-lime-400">{passwordStrength.label}</span>
+                  {/* Mode A: Change Passcode (Requires Previous Passcode) */}
+                  {passcodeMode === 'update' && (
+                    <form onSubmit={handleUpdatePasscode} className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-3">
+                      <h5 className="text-xs font-bold text-zinc-200">Confirm Previous Passcode & Set New PIN</h5>
+                      
+                      <div>
+                        <label className="text-[11px] text-zinc-400 block mb-1">Previous 4-digit Passcode (Required)</label>
+                        <input
+                          type="password"
+                          maxLength={4}
+                          pattern="[0-9]*"
+                          inputMode="numeric"
+                          value={previousPin}
+                          onChange={e => setPreviousPin(e.target.value.replace(/\D/g, ''))}
+                          placeholder="••••"
+                          className="w-40 px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-center tracking-widest text-sm text-lime-400 font-mono focus:outline-none focus:ring-1 focus:ring-lime-400"
+                        />
                       </div>
-                      <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden flex gap-1">
-                        {[1, 2, 3, 4, 5].map(step => (
-                          <div
-                            key={step}
-                            className={`h-full flex-1 transition-all duration-200 ${
-                              step <= passwordStrength.score ? passwordStrength.color : 'bg-zinc-800'
-                            }`}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div>
+                          <label className="text-[11px] text-zinc-400 block mb-1">New 4-digit PIN</label>
+                          <input
+                            type="password"
+                            maxLength={4}
+                            pattern="[0-9]*"
+                            inputMode="numeric"
+                            value={newPin}
+                            onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}
+                            placeholder="••••"
+                            className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-center tracking-widest text-sm text-lime-400 font-mono focus:outline-none focus:ring-1 focus:ring-lime-400"
                           />
-                        ))}
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-zinc-400 block mb-1">Confirm New PIN</label>
+                          <input
+                            type="password"
+                            maxLength={4}
+                            pattern="[0-9]*"
+                            inputMode="numeric"
+                            value={confirmPin}
+                            onChange={e => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                            placeholder="••••"
+                            className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-center tracking-widest text-sm text-lime-400 font-mono focus:outline-none focus:ring-1 focus:ring-lime-400"
+                          />
+                        </div>
                       </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          type="submit"
+                          disabled={previousPin.length !== 4 || newPin.length !== 4 || confirmPin.length !== 4}
+                          className="px-4 py-2 rounded-lg bg-lime-400 text-zinc-950 font-bold text-xs hover:bg-lime-300 disabled:opacity-50 transition-colors cursor-pointer"
+                        >
+                          Verify & Update Passcode
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPasscodeMode('forgot')}
+                          className="text-xs text-amber-400 hover:underline cursor-pointer"
+                        >
+                          Forgot previous passcode?
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Mode B: Disable Passcode (Requires Previous Passcode) */}
+                  {passcodeMode === 'disable' && (
+                    <form onSubmit={handleDisablePasscode} className="p-4 rounded-xl bg-rose-950/20 border border-rose-900/40 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-400" />
+                        <h5 className="text-xs font-bold text-rose-300">Disable Chat Lock</h5>
+                      </div>
+                      <p className="text-xs text-zinc-400">
+                        To prevent unauthorized tampering, you must enter your current 4-digit passcode before disabling chat lock.
+                      </p>
+                      
+                      <div className="w-48">
+                        <label className="text-[11px] text-zinc-400 block mb-1">Enter Previous 4-Digit Passcode</label>
+                        <input
+                          type="password"
+                          maxLength={4}
+                          pattern="[0-9]*"
+                          inputMode="numeric"
+                          value={previousPin}
+                          onChange={e => setPreviousPin(e.target.value.replace(/\D/g, ''))}
+                          placeholder="••••"
+                          className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-center tracking-widest text-sm text-rose-400 font-mono focus:outline-none focus:ring-1 focus:ring-rose-400"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-2">
+                        <button
+                          type="submit"
+                          disabled={previousPin.length !== 4}
+                          className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs disabled:opacity-50 transition-colors cursor-pointer"
+                        >
+                          Confirm & Disable Passcode
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPasscodeMode('forgot')}
+                          className="text-xs text-zinc-400 hover:text-amber-400 underline cursor-pointer"
+                        >
+                          Forgot Passcode?
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Mode C: Forgot Passcode (Reset via Email Verification) */}
+                  {passcodeMode === 'forgot' && (
+                    <div className="p-4 rounded-xl bg-zinc-900/60 border border-amber-800/40 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-amber-400" />
+                        <h5 className="text-xs font-bold text-amber-300">Reset Passcode via Email Verification</h5>
+                      </div>
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        If you do not remember your 4-digit PIN, we can send a 6-digit security code to your registered email address ({currentUser.email || 'jatindevsingh644@gmail.com'}).
+                      </p>
+
+                      {!isPasscodeCodeSent ? (
+                        <button
+                          type="button"
+                          onClick={handleSendPasscodeOtp}
+                          className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          Send 6-Digit Verification Code
+                        </button>
+                      ) : (
+                        <form onSubmit={handleResetPasscodeViaEmail} className="space-y-3 pt-2">
+                          <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 text-xs flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span>Verification code dispatched to your email. (Code: <span className="font-mono font-bold text-white">{passcodeResetCode}</span>)</span>
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] text-zinc-400 block mb-1">Enter 6-Digit Email Code</label>
+                            <input
+                              type="text"
+                              maxLength={6}
+                              value={enteredPasscodeCode}
+                              onChange={e => setEnteredPasscodeCode(e.target.value.replace(/\D/g, ''))}
+                              placeholder="123456"
+                              className="w-48 px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-center tracking-widest text-sm text-lime-400 font-mono focus:outline-none focus:ring-1 focus:ring-lime-400"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[11px] text-zinc-400 block mb-1">Set New 4-digit PIN</label>
+                              <input
+                                type="password"
+                                maxLength={4}
+                                pattern="[0-9]*"
+                                inputMode="numeric"
+                                value={newPin}
+                                onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}
+                                placeholder="••••"
+                                className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-center tracking-widest text-sm text-lime-400 font-mono focus:outline-none focus:ring-1 focus:ring-lime-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] text-zinc-400 block mb-1">Confirm New PIN</label>
+                              <input
+                                type="password"
+                                maxLength={4}
+                                pattern="[0-9]*"
+                                inputMode="numeric"
+                                value={confirmPin}
+                                onChange={e => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                                placeholder="••••"
+                                className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-center tracking-widest text-sm text-lime-400 font-mono focus:outline-none focus:ring-1 focus:ring-lime-400"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="submit"
+                              disabled={enteredPasscodeCode.length !== 6 || newPin.length !== 4 || confirmPin.length !== 4}
+                              className="px-4 py-2 rounded-lg bg-lime-400 text-zinc-950 font-bold text-xs hover:bg-lime-300 disabled:opacity-50 transition-colors cursor-pointer"
+                            >
+                              Verify Code & Reset Passcode
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleSendPasscodeOtp}
+                              className="text-xs text-zinc-400 hover:text-white"
+                            >
+                              Resend Code
+                            </button>
+                          </div>
+                        </form>
+                      )}
                     </div>
                   )}
                 </div>
+              )}
+            </div>
+          )}
 
-                <div>
-                  <label className="text-[11px] text-zinc-400 block mb-1">Confirm New Password</label>
-                  <input
-                    type="password"
-                    value={confirmPw}
-                    onChange={e => setConfirmPw(e.target.value)}
-                    placeholder="Repeat new password"
-                    className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-lime-400"
-                  />
+          {/* TAB 2: Two-Factor Authentication (2FA) & Security Password */}
+          {activeTab === 'password' && (
+            <div className="space-y-4">
+              {/* Top Summary Card */}
+              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-lime-400/10 text-lime-400">
+                      <Smartphone className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-white">Two-Factor Authentication (2FA)</h5>
+                      <p className="text-[11px] text-zinc-400">
+                        {twoFactorEnabled
+                          ? '2FA is ACTIVE and protected by your dedicated security password'
+                          : '2FA is currently INACTIVE. Set a security password to activate.'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    twoFactorEnabled
+                      ? 'bg-lime-400/20 text-lime-300 border border-lime-400/30'
+                      : 'bg-zinc-800 text-zinc-400'
+                  }`}>
+                    {twoFactorEnabled ? 'ACTIVE' : 'DISABLED'}
+                  </span>
                 </div>
+              </div>
 
-                <button
-                  type="submit"
-                  disabled={!currentPw || !newPw || newPw !== confirmPw}
-                  className="px-4 py-2 rounded-lg bg-lime-400 text-zinc-950 font-bold text-xs hover:bg-lime-300 disabled:opacity-50 transition-colors"
-                >
-                  Update Password
-                </button>
-              </form>
+              {/* Case 1: 2FA is NOT enabled yet */}
+              {!twoFactorEnabled ? (
+                <form onSubmit={handleEnableInitial2FA} className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-3">
+                  <div>
+                    <h5 className="text-xs font-bold text-zinc-200">Set Up 2FA Security Protection</h5>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Choose a dedicated 2FA security password. This password will be required when authenticating new devices or accessing sensitive settings.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-zinc-400 block mb-1">Set 2FA Security Password</label>
+                    <div className="relative">
+                      <input
+                        type={showInitialTwoFaPw ? 'text' : 'password'}
+                        value={initialTwoFaPw}
+                        onChange={e => setInitialTwoFaPw(e.target.value)}
+                        placeholder="Minimum 4 characters"
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-lime-400 pr-9"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowInitialTwoFaPw(!showInitialTwoFaPw)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                      >
+                        {showInitialTwoFaPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-zinc-400 block mb-1">Confirm 2FA Password</label>
+                    <input
+                      type="password"
+                      value={initialTwoFaConfirm}
+                      onChange={e => setInitialTwoFaConfirm(e.target.value)}
+                      placeholder="Re-enter 2FA password"
+                      className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-lime-400"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={!initialTwoFaPw || initialTwoFaPw.length < 4 || initialTwoFaPw !== initialTwoFaConfirm}
+                    className="px-4 py-2 rounded-lg bg-lime-400 text-zinc-950 font-bold text-xs hover:bg-lime-300 disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    Save & Enable 2FA Protection
+                  </button>
+                </form>
+              ) : (
+                /* Case 2: 2FA IS enabled -> Show Current, New, Confirm, and Forgot Password */
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 p-1 bg-zinc-900 rounded-lg border border-zinc-800 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setTwoFaMode('change')}
+                      className={`flex-1 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                        twoFaMode === 'change' ? 'bg-zinc-800 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Change 2FA Password
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTwoFaMode('disable')}
+                      className={`flex-1 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                        twoFaMode === 'disable' ? 'bg-zinc-800 text-rose-300 shadow-xs' : 'text-zinc-400 hover:text-rose-300'
+                      }`}
+                    >
+                      Disable 2FA
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTwoFaMode('forgot')}
+                      className={`flex-1 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                        twoFaMode === 'forgot' ? 'bg-zinc-800 text-amber-300 shadow-xs' : 'text-zinc-400 hover:text-amber-300'
+                      }`}
+                    >
+                      Forgot 2FA Password?
+                    </button>
+                  </div>
+
+                  {/* Mode A: Change 2FA Password (Current, New, Confirm) */}
+                  {twoFaMode === 'change' && (
+                    <form onSubmit={handleChange2FAPassword} className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-3">
+                      <h5 className="text-xs font-bold text-zinc-200">Change 2FA Security Password</h5>
+
+                      <div>
+                        <label className="text-[11px] text-zinc-400 block mb-1">Current 2FA Password</label>
+                        <div className="relative">
+                          <input
+                            type={showCurrentTwoFa ? 'text' : 'password'}
+                            value={currentTwoFaPw}
+                            onChange={e => setCurrentTwoFaPw(e.target.value)}
+                            placeholder="Enter current 2FA password"
+                            className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-lime-400 pr-9"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowCurrentTwoFa(!showCurrentTwoFa)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                          >
+                            {showCurrentTwoFa ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] text-zinc-400 block mb-1">New 2FA Password</label>
+                          <div className="relative">
+                            <input
+                              type={showNewTwoFa ? 'text' : 'password'}
+                              value={newTwoFaPw}
+                              onChange={e => setNewTwoFaPw(e.target.value)}
+                              placeholder="Minimum 4 characters"
+                              className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-lime-400 pr-9"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowNewTwoFa(!showNewTwoFa)}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                            >
+                              {showNewTwoFa ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] text-zinc-400 block mb-1">Confirm New 2FA Password</label>
+                          <input
+                            type="password"
+                            value={confirmNewTwoFaPw}
+                            onChange={e => setConfirmNewTwoFaPw(e.target.value)}
+                            placeholder="Re-enter new 2FA password"
+                            className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-lime-400"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          type="submit"
+                          disabled={!currentTwoFaPw || !newTwoFaPw || newTwoFaPw !== confirmNewTwoFaPw}
+                          className="px-4 py-2 rounded-lg bg-lime-400 text-zinc-950 font-bold text-xs hover:bg-lime-300 disabled:opacity-50 transition-colors cursor-pointer"
+                        >
+                          Update 2FA Password
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTwoFaMode('forgot')}
+                          className="text-xs text-amber-400 hover:underline cursor-pointer"
+                        >
+                          Forgot 2FA Password?
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Mode B: Disable 2FA (Requires Current 2FA Password) */}
+                  {twoFaMode === 'disable' && (
+                    <form onSubmit={handleDisable2FA} className="p-4 rounded-xl bg-rose-950/20 border border-rose-900/40 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-400" />
+                        <h5 className="text-xs font-bold text-rose-300">Disable Two-Factor Authentication</h5>
+                      </div>
+                      <p className="text-xs text-zinc-400">
+                        Enter your current 2FA password to confirm disabling two-factor protection:
+                      </p>
+
+                      <div className="w-64">
+                        <label className="text-[11px] text-zinc-400 block mb-1">Current 2FA Password</label>
+                        <input
+                          type="password"
+                          value={currentTwoFaPw}
+                          onChange={e => setCurrentTwoFaPw(e.target.value)}
+                          placeholder="Current 2FA password"
+                          className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-400"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-1">
+                        <button
+                          type="submit"
+                          disabled={!currentTwoFaPw}
+                          className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs disabled:opacity-50 transition-colors cursor-pointer"
+                        >
+                          Confirm & Disable 2FA
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTwoFaMode('forgot')}
+                          className="text-xs text-zinc-400 hover:text-amber-400 underline cursor-pointer"
+                        >
+                          Forgot 2FA Password?
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Mode C: Forgot 2FA Password (Reset via Email OTP) */}
+                  {twoFaMode === 'forgot' && (
+                    <div className="p-4 rounded-xl bg-zinc-900/60 border border-amber-800/40 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-amber-400" />
+                        <h5 className="text-xs font-bold text-amber-300">Reset 2FA Password via Email Verification</h5>
+                      </div>
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        Forgot your 2FA password? We can send a secure 6-digit recovery code to your registered email ({currentUser.email || 'jatindevsingh644@gmail.com'}).
+                      </p>
+
+                      {!isTwoFaCodeSent ? (
+                        <button
+                          type="button"
+                          onClick={handleSend2FAOtp}
+                          className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          Send 6-Digit 2FA Recovery Code
+                        </button>
+                      ) : (
+                        <form onSubmit={handleReset2FAViaEmail} className="space-y-3 pt-2">
+                          <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 text-xs flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span>Recovery code sent to your email. (Code: <span className="font-mono font-bold text-white">{twoFaResetCode}</span>)</span>
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] text-zinc-400 block mb-1">Enter 6-Digit Email Code</label>
+                            <input
+                              type="text"
+                              maxLength={6}
+                              value={enteredTwoFaCode}
+                              onChange={e => setEnteredTwoFaCode(e.target.value.replace(/\D/g, ''))}
+                              placeholder="123456"
+                              className="w-48 px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-center tracking-widest text-sm text-lime-400 font-mono focus:outline-none focus:ring-1 focus:ring-lime-400"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[11px] text-zinc-400 block mb-1">Set New 2FA Password</label>
+                              <input
+                                type="password"
+                                value={newTwoFaPw}
+                                onChange={e => setNewTwoFaPw(e.target.value)}
+                                placeholder="Minimum 4 characters"
+                                className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-lime-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] text-zinc-400 block mb-1">Confirm New 2FA Password</label>
+                              <input
+                                type="password"
+                                value={confirmNewTwoFaPw}
+                                onChange={e => setConfirmNewTwoFaPw(e.target.value)}
+                                placeholder="Repeat new password"
+                                className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-lime-400"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="submit"
+                              disabled={enteredTwoFaCode.length !== 6 || !newTwoFaPw || newTwoFaPw !== confirmNewTwoFaPw}
+                              className="px-4 py-2 rounded-lg bg-lime-400 text-zinc-950 font-bold text-xs hover:bg-lime-300 disabled:opacity-50 transition-colors cursor-pointer"
+                            >
+                              Verify Code & Reset 2FA Password
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleSend2FAOtp}
+                              className="text-xs text-zinc-400 hover:text-white"
+                            >
+                              Resend Code
+                            </button>
+                          </div>
+                        </form>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -422,7 +982,7 @@ export const SecurityModal: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-zinc-200">{log.action}</span>
                           <span className="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 font-mono">
-                            {log.category}
+                            {log.actor}
                           </span>
                         </div>
                         <p className="text-[11px] text-zinc-400 truncate">{log.details}</p>
@@ -430,7 +990,7 @@ export const SecurityModal: React.FC = () => {
                     </div>
                     <div className="text-right shrink-0 text-[10px] text-zinc-500 font-mono">
                       <div>{log.timestamp}</div>
-                      <div>{log.ip}</div>
+                      <div>{log.ipAddress}</div>
                     </div>
                   </div>
                 ))}
@@ -441,7 +1001,7 @@ export const SecurityModal: React.FC = () => {
           {/* TAB 4: Login Protection & Lockout */}
           {activeTab === 'lockout' && (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2">
+              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <h5 className="text-xs font-bold text-white">Daily Failed-Login Rate Limiting</h5>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
@@ -451,25 +1011,45 @@ export const SecurityModal: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-xs text-zinc-400 leading-relaxed">
-                  Accounts that fail 5 consecutive authentication attempts trigger an automatic 24-hour lockout and an administrative security spike alert.
+                  Accounts that fail 5 consecutive authentication attempts trigger an automatic 24-hour lockout and an administrative security spike alert to prevent credential stuffing.
                 </p>
-                <div className="pt-2 flex items-center gap-3 text-xs">
-                  <span className="text-zinc-400">Failed attempts today:</span>
-                  <span className="font-mono font-bold text-lime-400">{failedLoginAttempts} / 5</span>
+
+                <div className="p-3 rounded-lg bg-zinc-800/60 border border-zinc-750 flex items-center justify-between text-xs">
+                  <span className="text-zinc-300">Consecutive Failed Attempts:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-lime-400">{failedLoginAttempts} / 5</span>
+                    <span className="text-[11px] text-zinc-400">({5 - failedLoginAttempts} attempts remaining)</span>
+                  </div>
                 </div>
+
                 {isLockedOut && (
                   <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-900/60 text-rose-300 text-xs space-y-1">
                     <p className="font-bold">24-Hour Lockout Active</p>
                     <p className="text-[11px]">Remaining lockout duration: ~{lockoutRemainingHours} hours</p>
                   </div>
                 )}
-                <div className="pt-2">
+
+                {/* Explanation of Reset Failed Logins Counter */}
+                <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800/80 space-y-2 text-xs">
+                  <div className="flex items-center gap-2 text-zinc-300 font-bold text-[11px]">
+                    <HelpCircle className="w-3.5 h-3.5 text-lime-400" />
+                    <span>What happens when you click "Reset Failed Logins Counter"?</span>
+                  </div>
+                  <ul className="text-[11px] text-zinc-400 space-y-1 pl-4 list-disc leading-relaxed">
+                    <li>It <strong className="text-zinc-200">clears the failed authentication tally back to 0/5</strong>.</li>
+                    <li>It <strong className="text-zinc-200">immediately lifts any active 24-hour lockout penalty</strong>, allowing you to sign in again without waiting.</li>
+                    <li>It restores all <strong className="text-zinc-200">5 login attempts</strong> fresh.</li>
+                    <li>It records an event in the Audit Trail for security tracking.</li>
+                  </ul>
+                </div>
+
+                <div className="pt-1">
                   <button
                     onClick={resetFailedLogins}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-colors flex items-center gap-1.5"
+                    className="px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer border border-zinc-700"
                   >
-                    <RefreshCw className="w-3 h-3 text-lime-400" />
-                    Reset Failed Logins Counter (Testing)
+                    <RefreshCw className="w-3.5 h-3.5 text-lime-400" />
+                    Reset Failed Logins Counter (Restore 5 Attempts)
                   </button>
                 </div>
               </div>
@@ -491,7 +1071,7 @@ export const SecurityModal: React.FC = () => {
                       setPrivateMediaSignedUrlsEnabled(!privateMediaSignedUrlsEnabled);
                       showToast(privateMediaSignedUrlsEnabled ? 'Standard URLs restored' : 'Short-lived signed URLs (15m expiry) active');
                     }}
-                    className={`px-3 py-1 rounded text-xs font-bold ${
+                    className={`px-3 py-1 rounded text-xs font-bold cursor-pointer ${
                       privateMediaSignedUrlsEnabled ? 'bg-lime-400 text-zinc-950' : 'bg-zinc-800 text-zinc-400'
                     }`}
                   >
@@ -514,7 +1094,7 @@ export const SecurityModal: React.FC = () => {
                 </p>
                 <button
                   onClick={exportGDPRData}
-                  className="px-3.5 py-1.5 rounded-lg bg-lime-400/10 border border-lime-400/30 text-lime-400 text-xs font-bold hover:bg-lime-400/20 transition-colors flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 rounded-lg bg-lime-400/10 border border-lime-400/30 text-lime-400 text-xs font-bold hover:bg-lime-400/20 transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
                   Export Complete Data (.json)
@@ -536,7 +1116,7 @@ export const SecurityModal: React.FC = () => {
                       deleteAccountPermanently();
                     }
                   }}
-                  className="px-3.5 py-1.5 rounded-lg bg-rose-950/60 border border-rose-800 text-rose-300 text-xs font-bold hover:bg-rose-900 transition-colors"
+                  className="px-3.5 py-1.5 rounded-lg bg-rose-950/60 border border-rose-800 text-rose-300 text-xs font-bold hover:bg-rose-900 transition-colors cursor-pointer"
                 >
                   Permanently Delete Account
                 </button>

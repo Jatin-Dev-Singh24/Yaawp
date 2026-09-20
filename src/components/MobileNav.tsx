@@ -1,15 +1,18 @@
 import React from 'react';
-import { Home, Film, Users, Send, Compass } from 'lucide-react';
+import { Home, Film, Send, Compass } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
 export const MobileNav: React.FC = () => {
+  const navigate = useNavigate();
   const {
     activeTab,
     setActiveTab,
     currentUser,
     viewedUserId,
     openUserProfile,
-    unreadMessagesCount
+    unreadMessagesCount,
+    t
   } = useApp();
 
   const isProfileActive = activeTab === 'profile' && (!viewedUserId || viewedUserId === currentUser.id);
@@ -22,13 +25,16 @@ export const MobileNav: React.FC = () => {
       {/* 1. Home */}
       <button
         id="mobile-nav-feed"
-        onClick={() => setActiveTab('feed')}
+        onClick={() => {
+          setActiveTab('feed');
+          navigate('/app/home');
+        }}
         className={`p-2 transition-colors ${
           activeTab === 'feed'
             ? 'text-indigo-600 dark:text-indigo-400'
             : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
         }`}
-        aria-label="Home Feed"
+        aria-label={t('nav.home')}
       >
         <Home className={`w-5 h-5 ${activeTab === 'feed' ? 'stroke-[2.5px]' : 'stroke-[1.8px]'}`} />
       </button>
@@ -36,13 +42,16 @@ export const MobileNav: React.FC = () => {
       {/* 2. Reels */}
       <button
         id="mobile-nav-reels"
-        onClick={() => setActiveTab('reels')}
+        onClick={() => {
+          setActiveTab('reels');
+          navigate('/app/reels');
+        }}
         className={`p-2 transition-colors ${
           activeTab === 'reels'
             ? 'text-indigo-600 dark:text-indigo-400'
             : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
         }`}
-        aria-label="Reels"
+        aria-label={t('nav.reels')}
       >
         <Film className={`w-5 h-5 ${activeTab === 'reels' ? 'stroke-[2.5px]' : 'stroke-[1.8px]'}`} />
       </button>
@@ -50,42 +59,56 @@ export const MobileNav: React.FC = () => {
       {/* 3. Messages */}
       <button
         id="mobile-nav-messages"
-        onClick={() => setActiveTab('messages')}
-        className={`relative p-2 transition-colors ${
+        onClick={() => {
+          setActiveTab('messages');
+          navigate('/app/chats');
+        }}
+        className={`p-2 transition-colors ${
           activeTab === 'messages'
             ? 'text-indigo-600 dark:text-indigo-400'
             : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
         }`}
-        aria-label="Messages"
+        aria-label={`${t('nav.messages')}${unreadMessagesCount > 0 ? ` (${unreadMessagesCount} unread)` : ''}`}
       >
-        <Send className={`w-5 h-5 ${activeTab === 'messages' ? 'stroke-[2.5px]' : 'stroke-[1.8px]'}`} />
-        {unreadMessagesCount > 0 && (
-          <span className="absolute top-0.5 right-0.5 flex h-3.5 min-w-3.5 px-1 items-center justify-center rounded-full bg-indigo-600 text-[9px] font-bold text-white shadow-xs">
-            {unreadMessagesCount}
-          </span>
-        )}
+        <div className="relative inline-flex items-center justify-center">
+          <Send className={`w-5 h-5 ${activeTab === 'messages' ? 'stroke-[2.5px]' : 'stroke-[1.8px]'}`} />
+          {unreadMessagesCount > 0 && (
+            <span
+              id="mobile-nav-messages-badge"
+              className="absolute -top-1.5 -right-2 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-indigo-600 text-[9px] font-bold text-white leading-none shadow-sm ring-2 ring-white dark:ring-slate-900 transition-transform animate-in zoom-in-75"
+            >
+              {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+            </span>
+          )}
+        </div>
       </button>
 
-      {/* 5. Explore */}
+      {/* 4. Explore */}
       <button
         id="mobile-nav-explore"
-        onClick={() => setActiveTab('explore')}
+        onClick={() => {
+          setActiveTab('explore');
+          navigate('/app/explore');
+        }}
         className={`p-2 transition-colors ${
           activeTab === 'explore'
             ? 'text-indigo-600 dark:text-indigo-400'
             : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
         }`}
-        aria-label="Explore"
+        aria-label={t('nav.explore')}
       >
         <Compass className={`w-5 h-5 ${activeTab === 'explore' ? 'stroke-[2.5px]' : 'stroke-[1.8px]'}`} />
       </button>
 
-      {/* 6. Profile */}
+      {/* 5. Profile */}
       <button
         id="mobile-nav-profile"
-        onClick={() => openUserProfile(currentUser.id)}
+        onClick={() => {
+          openUserProfile(currentUser.id);
+          navigate('/app/profile');
+        }}
         className="p-1.5 flex items-center justify-center"
-        aria-label="Profile"
+        aria-label={t('nav.profile')}
       >
         <img
           src={currentUser.avatar}

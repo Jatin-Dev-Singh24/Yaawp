@@ -1,88 +1,169 @@
 import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
-import { Sidebar } from './components/Sidebar';
-import { MobileHeader } from './components/MobileHeader';
-import { MobileNav } from './components/MobileNav';
-import { FeedView } from './components/FeedView';
-import { ExploreView } from './components/ExploreView';
-import { CommunitiesView } from './components/CommunitiesView';
-import { ReelsView } from './components/ReelsView';
-import { MessagesView } from './components/MessagesView';
-import { NotificationsView } from './components/NotificationsView';
-import { ProfileView } from './components/ProfileView';
-import { StoryViewerModal } from './components/StoryViewerModal';
-import { PostDetailModal } from './components/PostDetailModal';
-import { CreatePostModal } from './components/CreatePostModal';
-import { EditProfileModal } from './components/EditProfileModal';
-import { MetaLegalModal } from './components/MetaLegalModal';
-import { CreateAccountModal } from './components/CreateAccountModal';
-import { TermsConsentBanner } from './components/TermsConsentBanner';
-import { AmbientCursor } from './components/AmbientCursor';
-import { SecurityModal } from './components/SecurityModal';
-import { BehindTheScenesModal } from './components/BehindTheScenesModal';
-import { ProfileSettingsModal } from './components/ProfileSettingsModal';
-import { AppPreviewPage } from './components/AppPreviewPage';
+import { TemporaryGamesProvider } from './context/TemporaryGamesContext';
 import { AnimatePresence, motion } from 'motion/react';
+import {
+  PreviewPage,
+  LoginPage,
+  SignupPage,
+  AppLayout,
+  HomePage,
+  ExplorePage,
+  ReelsPage,
+  ChatsPage,
+  CommunitiesPage,
+  ProfilePage,
+  NotificationsPage,
+  SettingsPage,
+  LegalPage
+} from './pages';
+import { CreateAccountModal } from './components/CreateAccountModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
-const MainLayout: React.FC = () => {
-  const { activeTab } = useApp();
-
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col md:flex-row transition-colors selection:bg-lime-500 selection:text-zinc-950 relative">
-      {/* Ambient Cursor Aura for Dark Premium Theme */}
-      <AmbientCursor />
-
-      {/* Desktop Sidebar Navigation */}
-      <Sidebar />
-
-      {/* Mobile Top Header */}
-      <MobileHeader />
-
-      {/* Main Content Area */}
-      <div className="flex-1 md:pl-18 xl:pl-[244px] pb-16 md:pb-0 min-h-screen overflow-x-hidden relative z-10">
-        {activeTab === 'feed' && <FeedView />}
-        {activeTab === 'explore' && <ExploreView />}
-        {activeTab === 'communities' && <CommunitiesView />}
-        {activeTab === 'reels' && <ReelsView />}
-        {activeTab === 'messages' && <MessagesView />}
-        {activeTab === 'notifications' && <NotificationsView />}
-        {activeTab === 'profile' && <ProfileView />}
-      </div>
-
-      {/* Mobile Bottom Navigation Bar */}
-      <MobileNav />
-
-      {/* Global Modals */}
-      <StoryViewerModal />
-      <PostDetailModal />
-      <CreatePostModal />
-      <EditProfileModal />
-      <MetaLegalModal />
-      <CreateAccountModal />
-      <SecurityModal />
-      <BehindTheScenesModal />
-      <ProfileSettingsModal />
-
-      {/* Yaawp Legal Terms Agreement Consent Banner */}
-      <TermsConsentBanner />
-    </div>
-  );
-};
-
-const AppContent: React.FC = () => {
-  const { isAuthenticated, toastMessage } = useApp();
+const AppRoutes: React.FC = () => {
+  const { toastMessage } = useApp();
 
   return (
     <>
-      {isAuthenticated ? (
-        <MainLayout />
-      ) : (
-        <>
-          <AppPreviewPage />
-          <CreateAccountModal />
-          <MetaLegalModal />
-        </>
-      )}
+      <Routes>
+        {/* / → preview */}
+        <Route
+          path="/"
+          element={
+            <ErrorBoundary fallbackTitle="Unable to load Home">
+              <PreviewPage />
+            </ErrorBoundary>
+          }
+        />
+
+        {/* /auth/login → login */}
+        <Route
+          path="/auth/login"
+          element={
+            <ErrorBoundary fallbackTitle="Unable to load Login">
+              <LoginPage />
+            </ErrorBoundary>
+          }
+        />
+
+        {/* /auth/signup → signup */}
+        <Route
+          path="/auth/signup"
+          element={
+            <ErrorBoundary fallbackTitle="Unable to load Signup">
+              <SignupPage />
+            </ErrorBoundary>
+          }
+        />
+
+        {/* /app/* routes */}
+        <Route
+          path="/app"
+          element={
+            <ErrorBoundary fallbackTitle="App error encountered">
+              <AppLayout />
+            </ErrorBoundary>
+          }
+        >
+          <Route index element={<Navigate to="/app/home" replace />} />
+          {/* /app/home → FeedView */}
+          <Route
+            path="home"
+            element={
+              <ErrorBoundary fallbackTitle="Feed failed to load">
+                <HomePage />
+              </ErrorBoundary>
+            }
+          />
+          {/* /app/explore → ExploreView */}
+          <Route
+            path="explore"
+            element={
+              <ErrorBoundary fallbackTitle="Explore failed to load">
+                <ExplorePage />
+              </ErrorBoundary>
+            }
+          />
+          {/* /app/reels → ReelsView */}
+          <Route
+            path="reels"
+            element={
+              <ErrorBoundary fallbackTitle="Reels failed to load">
+                <ReelsPage />
+              </ErrorBoundary>
+            }
+          />
+          {/* /app/chats → MessagesView */}
+          <Route
+            path="chats"
+            element={
+              <ErrorBoundary fallbackTitle="Messages failed to load">
+                <ChatsPage />
+              </ErrorBoundary>
+            }
+          />
+          {/* /app/communities → CommunitiesView */}
+          <Route
+            path="communities"
+            element={
+              <ErrorBoundary fallbackTitle="Communities failed to load">
+                <CommunitiesPage />
+              </ErrorBoundary>
+            }
+          />
+          {/* /app/profile → ProfileView */}
+          <Route
+            path="profile"
+            element={
+              <ErrorBoundary fallbackTitle="Profile failed to load">
+                <ProfilePage />
+              </ErrorBoundary>
+            }
+          />
+          {/* /app/notifications → NotificationsView */}
+          <Route
+            path="notifications"
+            element={
+              <ErrorBoundary fallbackTitle="Notifications failed to load">
+                <NotificationsPage />
+              </ErrorBoundary>
+            }
+          />
+          {/* /app/settings → SettingsView */}
+          <Route
+            path="settings"
+            element={
+              <ErrorBoundary fallbackTitle="Settings failed to load">
+                <SettingsPage />
+              </ErrorBoundary>
+            }
+          />
+          {/* /app/legal → LegalView (wrinkle textured) */}
+          <Route
+            path="legal"
+            element={
+              <ErrorBoundary fallbackTitle="Legal Center failed to load">
+                <LegalPage />
+              </ErrorBoundary>
+            }
+          />
+        </Route>
+
+        {/* Convenient Fallbacks */}
+        <Route path="/feed" element={<Navigate to="/app/home" replace />} />
+        <Route path="/messages" element={<Navigate to="/app/chats" replace />} />
+        <Route path="/settings" element={<Navigate to="/app/settings" replace />} />
+        <Route path="/legal" element={<Navigate to="/app/legal" replace />} />
+        <Route path="/terms" element={<Navigate to="/app/legal?doc=terms" replace />} />
+        <Route path="/privacy" element={<Navigate to="/app/legal?doc=privacy" replace />} />
+        <Route path="/cookies" element={<Navigate to="/app/legal?doc=cookies" replace />} />
+        <Route path="/community" element={<Navigate to="/app/legal?doc=community" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+
+      {/* Global Modals for Landing/Auth pages */}
+      <CreateAccountModal />
 
       {/* Global Toast Notification */}
       <AnimatePresence>
@@ -103,8 +184,14 @@ const AppContent: React.FC = () => {
 
 export default function App() {
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <ErrorBoundary fallbackTitle="Application Error">
+      <AppProvider>
+        <TemporaryGamesProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </TemporaryGamesProvider>
+      </AppProvider>
+    </ErrorBoundary>
   );
 }

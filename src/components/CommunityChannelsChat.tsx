@@ -19,6 +19,14 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Community, CommunityChatMessage } from '../types';
+import { FormattedText } from './FormattedText';
+import { EmojiKitchenModal } from './EmojiKitchenModal';
+import { EmojiBlendSuggestionBanner } from './EmojiBlendSuggestionBanner';
+import {
+  detectEmojiBlendInText,
+  formatBlendToken,
+  getBlendById
+} from '../data/emojiKitchen';
 
 interface CommunityChannelsChatProps {
   community: Community;
@@ -49,6 +57,8 @@ export const CommunityChannelsChat: React.FC<CommunityChannelsChatProps> = ({ co
 
   const [activeChannelId, setActiveChannelId] = useState<string>(channels[0]?.id || 'general');
   const [inputText, setInputText] = useState('');
+  const [isKitchenOpen, setIsKitchenOpen] = useState(false);
+  const [dismissedBlendKey, setDismissedBlendKey] = useState<string | null>(null);
   const [mediaUrl, setMediaUrl] = useState('');
   const [replyingTo, setReplyingTo] = useState<CommunityChatMessage | null>(null);
   const [showEmojiPickerForMsgId, setShowEmojiPickerForMsgId] = useState<string | null>(null);
@@ -429,9 +439,9 @@ export const CommunityChannelsChat: React.FC<CommunityChannelsChatProps> = ({ co
                         </div>
 
                         {/* Content text */}
-                        <p className="text-xs text-slate-700 dark:text-slate-200 mt-0.5 break-words">
-                          {msg.text}
-                        </p>
+                        <div className="text-xs text-slate-700 dark:text-slate-200 mt-0.5 break-words">
+                          <FormattedText text={msg.text} />
+                        </div>
 
                         {/* Attached Media */}
                         {msg.mediaUrl && (
@@ -447,26 +457,35 @@ export const CommunityChannelsChat: React.FC<CommunityChannelsChatProps> = ({ co
                         {/* Emoji Reactions display */}
                         {msg.reactions && Object.keys(msg.reactions).length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {Object.entries(msg.reactions).map(([emoji, uids]) => (
-                              <button
-                                key={emoji}
-                                type="button"
-                                onClick={() =>
-                                  reactToCommunityChatMessage(
-                                    community.id,
-                                    activeChannelId,
-                                    msg.id,
-                                    emoji
-                                  )
-                                }
-                                className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] border border-slate-200 dark:border-slate-700 hover:border-indigo-400"
-                              >
-                                <span>{emoji}</span>
-                                <span className="font-mono">
-                                  {Array.isArray(uids) ? uids.length : 1}
-                                </span>
-                              </button>
-                            ))}
+                            {Object.entries(msg.reactions).map(([emoji, uids]) => {
+                              const isKitchenBlend = emoji.startsWith('[kitchen:');
+                              const blend = isKitchenBlend ? getBlendById(emoji.slice(9, -1)) : null;
+                              return (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() =>
+                                    reactToCommunityChatMessage(
+                                      community.id,
+                                      activeChannelId,
+                                      msg.id,
+                                      emoji
+                                    )
+                                  }
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] border border-slate-200 dark:border-slate-700 hover:border-indigo-400"
+                                  title={blend ? blend.name : emoji}
+                                >
+                                  {blend ? (
+                                    <img src={blend.assetUrl} alt={blend.name} className="w-3.5 h-3.5 object-contain" />
+                                  ) : (
+                                    <span>{emoji}</span>
+                                  )}
+                                  <span className="font-mono">
+                                    {Array.isArray(uids) ? uids.length : 1}
+                                  </span>
+                                </button>
+                              );
+                            })}
                           </div>
                         )}
 
@@ -516,6 +535,29 @@ export const CommunityChannelsChat: React.FC<CommunityChannelsChatProps> = ({ co
             </div>
           )}
 
+          {/* Real-time Emoji Kitchen blend suggestion banner */}
+          {(() => {
+            const detected = detectEmojiBlendInText(inputText);
+            if (detected && dismissedBlendKey !== `${detected.blend.id}_${detected.match}`) {
+              return (
+                <div className="px-3 pt-2 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+                  <EmojiBlendSuggestionBanner
+                    blend={detected.blend}
+                    onApplyBlend={blend => {
+                      const token = formatBlendToken(blend);
+                      setInputText(prev => prev.replace(detected.match, `${token} `));
+                    }}
+                    onOpenKitchen={() => setIsKitchenOpen(true)}
+                    onDismiss={() => {
+                      setDismissedBlendKey(`${detected.blend.id}_${detected.match}`);
+                    }}
+                  />
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           {/* Input Bar */}
           <form
             onSubmit={handleSendMessage}
@@ -531,6 +573,16 @@ export const CommunityChannelsChat: React.FC<CommunityChannelsChatProps> = ({ co
               title="Add image"
             >
               <Image className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsKitchenOpen(true)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-xs"
+              title="Emoji Kitchen Lab"
+              aria-label="Emoji Kitchen"
+            >
+              🧪
             </button>
 
             <input
@@ -621,6 +673,19 @@ export const CommunityChannelsChat: React.FC<CommunityChannelsChatProps> = ({ co
             </div>
           </form>
         </div>
+      )}
+      {/* Emoji Kitchen Modal for Community Channel Chat */}
+      {isKitchenOpen && (
+        <EmojiKitchenModal
+          isOpen={isKitchenOpen}
+          onClose={() => setIsKitchenOpen(false)}
+          onSelectBlend={(blend) => {
+            const token = formatBlendToken(blend);
+            setInputText(prev => (prev ? `${prev} ${token}` : token));
+            setIsKitchenOpen(false);
+          }}
+          insertButtonLabel="Add to Channel"
+        />
       )}
     </div>
   );

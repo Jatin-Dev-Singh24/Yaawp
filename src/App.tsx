@@ -5,6 +5,7 @@ import { TemporaryGamesProvider } from './context/TemporaryGamesContext';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   PreviewPage,
+  LegalStandalonePage,
   LoginPage,
   SignupPage,
   AppLayout,
@@ -17,9 +18,11 @@ import {
   NotificationsPage,
   SettingsPage,
   LegalPage
-} from './pages';
+} from './pages/index';
 import { CreateAccountModal } from './components/CreateAccountModal';
+import { SetUsernameModal } from './components/auth/SetUsernameModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { OfflineBanner } from './components/pwa/OfflineBanner';
 
 const AppRoutes: React.FC = () => {
   const { toastMessage } = useApp();
@@ -150,20 +153,33 @@ const AppRoutes: React.FC = () => {
           />
         </Route>
 
+        {/* /legal → Public Standalone Legal Center (with Back to Home button) */}
+        <Route
+          path="/legal"
+          element={
+            <ErrorBoundary fallbackTitle="Legal Center failed to load">
+              <LegalStandalonePage />
+            </ErrorBoundary>
+          }
+        />
+
         {/* Convenient Fallbacks */}
         <Route path="/feed" element={<Navigate to="/app/home" replace />} />
         <Route path="/messages" element={<Navigate to="/app/chats" replace />} />
         <Route path="/settings" element={<Navigate to="/app/settings" replace />} />
-        <Route path="/legal" element={<Navigate to="/app/legal" replace />} />
-        <Route path="/terms" element={<Navigate to="/app/legal?doc=terms" replace />} />
-        <Route path="/privacy" element={<Navigate to="/app/legal?doc=privacy" replace />} />
-        <Route path="/cookies" element={<Navigate to="/app/legal?doc=cookies" replace />} />
-        <Route path="/community" element={<Navigate to="/app/legal?doc=community" replace />} />
+        <Route path="/terms" element={<Navigate to="/legal?doc=terms" replace />} />
+        <Route path="/privacy" element={<Navigate to="/legal?doc=privacy" replace />} />
+        <Route path="/cookies" element={<Navigate to="/legal?doc=cookies" replace />} />
+        <Route path="/community" element={<Navigate to="/legal?doc=community" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
       {/* Global Modals for Landing/Auth pages */}
       <CreateAccountModal />
+      <SetUsernameModal />
+
+      {/* Offline Connectivity Status Banner */}
+      <OfflineBanner />
 
       {/* Global Toast Notification */}
       <AnimatePresence>

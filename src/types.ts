@@ -19,10 +19,11 @@ export interface UserSummary {
   bioSnippet?: string;
 }
 
-export type AvatarAudience = 'everyone' | 'followers' | 'close_friends' | 'custom_users' | 'none';
+export type AvatarAudience = 'everyone' | 'followers' | 'close_friends' | 'custom_users' | 'none' | 'custom';
 
 export interface CustomPfpConfig {
   url: string;
+  label?: string;
   hasNoPfp?: boolean;
   audience: AvatarAudience;
   customUsernames?: string[];
@@ -90,6 +91,9 @@ export interface Post {
   isSaved: boolean;
   score?: number;
   isReposted?: boolean;
+  repostsCount?: number;
+  image?: string;
+  mediaUrl?: string;
   originalPostId?: string;
   upvotes?: number;
   downvotes?: number;
@@ -104,12 +108,12 @@ export interface Post {
   postType?: 'image' | 'video' | 'text';
   communityId?: string;
   communityName?: string;
-  audience?: 'everyone' | 'followers' | 'close_friends' | 'private' | 'community' | 'specific';
+  audience?: 'everyone' | 'followers' | 'close_friends' | 'private' | 'community' | 'specific' | 'custom_circle';
   audienceCircleId?: string;
   isHiddenFromOwnProfile?: boolean;
   isArchived?: boolean;
   recommendationReason?: string;
-  reactions?: { [emoji: string]: number };
+  reactions?: { [emoji: string]: string[] | number };
   userReaction?: string;
   quotePost?: {
     id: string;
@@ -173,7 +177,10 @@ export interface CommunityModerationConfig {
 export interface CommunityPersona {
   communityId: string;
   displayName: string;
-  avatarUrl: string;
+  avatarUrl?: string;
+  avatar?: string;
+  bio?: string;
+  badge?: string;
   flair?: string;
 }
 
@@ -285,10 +292,22 @@ export interface Story {
   storyTheme?: string;
 }
 
+export interface ReelAudioTrack {
+  id: string;
+  title: string;
+  artist: string;
+  durationSeconds: number;
+  previewUrl: string;
+  coverUrl?: string;
+  category?: 'trending' | 'pop' | 'lofi' | 'electronic' | 'hiphop' | 'ambient';
+}
+
 export interface Reel {
   id: string;
   user: UserSummary;
   mediaUrl: string;
+  thumbnailUrl?: string;
+  durationSeconds?: number;
   caption: string;
   musicTitle: string;
   likesCount: number;
@@ -298,6 +317,10 @@ export interface Reel {
   isSaved: boolean;
   filterClass?: string;
   comments?: Comment[];
+  trimStart?: number;
+  trimEnd?: number;
+  audioTrackUrl?: string;
+  audioTrackId?: string;
 }
 
 export interface NotificationItem {
@@ -339,7 +362,7 @@ export interface GameSession {
 export interface PollOption {
   id: string;
   text: string;
-  votes: number | string[];
+  votes: number;
   voters?: string[];
 }
 
@@ -530,6 +553,7 @@ export interface NewAccountRegistration {
   agreedToPrivacy: boolean;
   agreedToCookies?: boolean;
   agreedToCommunity?: boolean;
+  captchaToken?: string;
 }
 
 export type FeedMode =
@@ -603,7 +627,7 @@ export interface PresenceStatus {
   emoji: string;
   label: string;
   detail?: string;
-  updatedAt: string;
+  updatedAt: string | number;
 }
 
 export interface ScheduledChatMessage {

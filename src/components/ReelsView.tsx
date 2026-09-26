@@ -16,13 +16,15 @@ import {
   Send,
   Smile,
   Play,
-  Pause
+  Pause,
+  Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ReelSkeleton } from './SkeletonScreens';
 import { useApp } from '../context/AppContext';
 import { SharePostModal } from './SharePostModal';
 import { ThreadedCommentTree } from './ThreadedCommentTree';
+import { ReelsEditor } from './ReelsEditor';
 import { Post } from '../types';
 
 export const ReelsView: React.FC = () => {
@@ -37,6 +39,7 @@ export const ReelsView: React.FC = () => {
     addReelComment,
     likeReelComment,
     deleteReelComment,
+    createReel,
     currentUser,
     openUserProfile
   } = useApp();
@@ -49,6 +52,7 @@ export const ReelsView: React.FC = () => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showCommentsModal, setShowCommentsModal] = useState(false);
+  const [showReelsEditor, setShowReelsEditor] = useState(false);
   const [reelCommentText, setReelCommentText] = useState('');
 
   // Seeking & Playback Progress States
@@ -57,6 +61,7 @@ export const ReelsView: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(true);
   const [isDraggingSeek, setIsDraggingSeek] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
 
   // Initial load skeleton simulation for seamless perceived loading
@@ -76,13 +81,26 @@ export const ReelsView: React.FC = () => {
   // Video duration listener if video is playing
   const handleVideoLoadedMetadata = () => {
     if (videoRef.current && videoRef.current.duration) {
-      setDuration(videoRef.current.duration);
+      const dur = videoRef.current.duration;
+      setDuration(dur);
+      if (currentReel?.trimStart) {
+        videoRef.current.currentTime = currentReel.trimStart;
+        setCurrentTime(currentReel.trimStart);
+      }
     }
   };
 
   const handleVideoTimeUpdate = () => {
     if (videoRef.current && !isDraggingSeek) {
-      setCurrentTime(videoRef.current.currentTime);
+      const time = videoRef.current.currentTime;
+      setCurrentTime(time);
+
+      // Loop within trimmed boundary if specified
+      if (currentReel?.trimEnd && time >= currentReel.trimEnd) {
+        const start = currentReel.trimStart || 0;
+        videoRef.current.currentTime = start;
+        videoRef.current.play().catch(() => {});
+      }
     }
   };
 
@@ -92,15 +110,53 @@ export const ReelsView: React.FC = () => {
 
     const interval = setInterval(() => {
       setCurrentTime(prev => {
-        if (prev >= duration) {
-          return 0; // Loop reel
+        const maxTime = currentReel?.trimEnd || duration;
+        if (prev >= maxTime) {
+          return currentReel?.trimStart || 0; // Loop reel
         }
         return prev + 0.1;
       });
     }, 100);
 
     return () => clearInterval(interval);
-  }, [isPlaying, isDraggingSeek, duration, videoRef]);
+  }, [isPlaying, isDraggingSeek, duration, videoRef, currentReel]);
+
+  // Handle external audio track playback if reel has audioTrackUrl
+  useEffect(() => {
+    if (!currentReel?.audioTrackUrl) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      return;
+    }
+
+    try {
+      const audio = new Audio(currentReel.audioTrackUrl);
+      audio.loop = true;
+      audio.muted = isMuted;
+      audioRef.current = audio;
+      if (isPlaying) {
+        audio.play().catch(() => {});
+      }
+    } catch {}
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, [currentReelIndex, currentReel?.audioTrackUrl]);
+
+  // Sync mute to audio track
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.muted = isMuted;
+    }
+    if (videoRef.current) {
+      videoRef.current.muted = isMuted;
+    }
+  }, [isMuted]);
 
   // Seeking pointer event handlers
   const updateSeekPosition = (clientX: number) => {
@@ -176,9 +232,65 @@ export const ReelsView: React.FC = () => {
     showToast('Reel link copied to clipboard!');
   };
 
-  // Render content-specific ReelSkeleton during initial load or if reels are loading
-  if (isInitialLoading || !currentReel) {
+  // Render content-specific ReelSkeleton during initial load
+  if (isInitialLoading) {
     return <ReelSkeleton />;
+  }
+
+  const isVideoMedia =
+    currentReel?.mediaUrl &&
+    (currentReel.mediaUrl.startsWith('data:video') ||
+      currentReel.mediaUrl.startsWith('blob:') ||
+      currentReel.mediaUrl.match(/\.(mp4|webm|mov|ogg)(\?.*)?$/i) ||
+      Boolean(currentReel.trimStart !== undefined || currentReel.audioTrackUrl));
+
+  if (!currentReel || reels.length === 0) {
+    return (
+      <div id="reels-empty-state" className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6 text-center">
+        <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center mb-4">
+          <Film className="w-8 h-8 text-slate-400" />
+        </div>
+        <h3 className="text-lg font-medium text-slate-800 dark:text-slate-200">No Reels Yet</h3>
+        <p className="text-xs text-slate-500 max-w-sm mt-1 mb-6">
+          Be the first to share a moment with short-form video on YAAWP.
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowReelsEditor(true)}
+            className="px-5 py-2.5 rounded-full bg-lime-500 hover:bg-lime-400 text-zinc-950 text-xs font-semibold tracking-wider uppercase transition-colors flex items-center gap-1.5 shadow-md shadow-lime-500/20"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Create Reel</span>
+          </button>
+          <button
+            onClick={() => navigate('/app/home')}
+            className="px-5 py-2.5 rounded-full bg-neutral-200 dark:bg-neutral-800 hover:bg-neutral-300 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-xs font-semibold tracking-wider uppercase transition-colors"
+          >
+            Return to Feed
+          </button>
+        </div>
+
+        {showReelsEditor && (
+          <ReelsEditor
+            onClose={() => setShowReelsEditor(false)}
+            onPublish={reelData => {
+              createReel({
+                mediaUrl: reelData.videoUrl,
+                caption: reelData.caption,
+                musicTitle: reelData.musicTitle,
+                durationSeconds: reelData.duration,
+                filterClass: reelData.filterClass,
+                trimStart: reelData.trimStart,
+                trimEnd: reelData.trimEnd,
+                audioTrackUrl: reelData.audioTrackUrl,
+                audioTrackId: reelData.audioTrackId
+              });
+              setShowReelsEditor(false);
+            }}
+          />
+        )}
+      </div>
+    );
   }
 
   return (
@@ -202,15 +314,33 @@ export const ReelsView: React.FC = () => {
           )}
 
           {/* Reel Media Visual */}
-          <img
-            key={currentReel.id}
-            src={currentReel.mediaUrl}
-            alt={currentReel.caption}
-            onLoad={() => setIsMediaLoaded(true)}
-            className={`w-full h-full object-cover transition-opacity duration-300 ${
-              isMediaLoaded && !isTransitioning ? 'opacity-100' : 'opacity-0'
-            } ${currentReel.filterClass || 'filter-normal'}`}
-          />
+          {isVideoMedia ? (
+            <video
+              ref={videoRef}
+              key={currentReel.id}
+              src={currentReel.mediaUrl}
+              playsInline
+              autoPlay
+              loop={!currentReel.trimEnd}
+              muted={isMuted}
+              onLoadedMetadata={handleVideoLoadedMetadata}
+              onTimeUpdate={handleVideoTimeUpdate}
+              onLoadedData={() => setIsMediaLoaded(true)}
+              className={`w-full h-full object-cover transition-opacity duration-300 ${
+                isMediaLoaded && !isTransitioning ? 'opacity-100' : 'opacity-0'
+              } ${currentReel.filterClass || 'filter-normal'}`}
+            />
+          ) : (
+            <img
+              key={currentReel.id}
+              src={currentReel.mediaUrl}
+              alt={currentReel.caption}
+              onLoad={() => setIsMediaLoaded(true)}
+              className={`w-full h-full object-cover transition-opacity duration-300 ${
+                isMediaLoaded && !isTransitioning ? 'opacity-100' : 'opacity-0'
+              } ${currentReel.filterClass || 'filter-normal'}`}
+            />
+          )}
 
           {/* Sound Mute/Unmute Indicator Button */}
           <button
@@ -378,6 +508,20 @@ export const ReelsView: React.FC = () => {
             </span>
           </button>
 
+          {/* Create Reel Button */}
+          <button
+            onClick={() => setShowReelsEditor(true)}
+            className="flex flex-col items-center gap-1 group cursor-pointer"
+            title="Create a new Reel"
+          >
+            <div className="w-11 h-11 rounded-full bg-lime-500/10 dark:bg-lime-500/20 border border-lime-500/30 flex items-center justify-center group-hover:scale-110 text-lime-600 dark:text-lime-400 transition-transform">
+              <Plus className="w-6 h-6 stroke-[2.5]" />
+            </div>
+            <span className="text-[10px] font-semibold text-lime-600 dark:text-lime-400">
+              Create
+            </span>
+          </button>
+
           {/* Bookmark */}
           <button
             onClick={() => toggleSaveReel(currentReel.id)}
@@ -532,6 +676,27 @@ export const ReelsView: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Reels Editor Modal */}
+      {showReelsEditor && (
+        <ReelsEditor
+          onClose={() => setShowReelsEditor(false)}
+          onPublish={reelData => {
+            createReel({
+              mediaUrl: reelData.videoUrl,
+              caption: reelData.caption,
+              musicTitle: reelData.musicTitle,
+              durationSeconds: reelData.duration,
+              filterClass: reelData.filterClass,
+              trimStart: reelData.trimStart,
+              trimEnd: reelData.trimEnd,
+              audioTrackUrl: reelData.audioTrackUrl,
+              audioTrackId: reelData.audioTrackId
+            });
+            setShowReelsEditor(false);
+          }}
+        />
+      )}
     </div>
   );
 };

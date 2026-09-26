@@ -393,21 +393,24 @@ html[data-theme="light"]:not(.dark) .bg-slate-50 {
   font-family: 'Gros Ventre', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-/* Dark premium lime glow & accents */
-.lime-gradient {
-  background: linear-gradient(135deg, #bef264 0%, #a3e635 50%, #65a30d 100%);
+/* Dark premium refined aura & accents */
+.lime-gradient,
+.brand-gradient {
+  background: linear-gradient(135deg, #818cf8 0%, #6366f1 50%, #4f46e5 100%);
 }
 
-.lime-glow {
-  box-shadow: 0 0 20px -2px rgba(163, 230, 53, 0.4);
+.lime-glow,
+.brand-glow {
+  box-shadow: 0 0 20px -2px rgba(99, 102, 241, 0.35);
 }
 
-.lime-border-glow {
-  border-color: rgba(163, 230, 53, 0.4);
-  box-shadow: 0 0 12px -2px rgba(163, 230, 53, 0.25);
+.lime-border-glow,
+.brand-border-glow {
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 0 12px -2px rgba(99, 102, 241, 0.2);
 }
 
-/* Atmospheric surreal lighting with lime accent */
+/* Atmospheric surreal lighting with subtle celestial accent */
 .ambient-glow {
   position: relative;
   transition: border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s ease;
@@ -421,7 +424,7 @@ html[data-theme="light"]:not(.dark) .bg-slate-50 {
   pointer-events: none;
   background: radial-gradient(
     500px circle at var(--local-mouse-x, var(--mouse-x, 50%)) var(--local-mouse-y, var(--mouse-y, 50%)),
-    rgba(163, 230, 53, 0.08),
+    rgba(99, 102, 241, 0.07),
     transparent 50%
   );
   opacity: 0.5;
@@ -434,21 +437,21 @@ html[data-theme="light"]:not(.dark) .bg-slate-50 {
   opacity: 1;
   background: radial-gradient(
     650px circle at var(--local-mouse-x, var(--mouse-x, 50%)) var(--local-mouse-y, var(--mouse-y, 50%)),
-    rgba(163, 230, 53, 0.16),
+    rgba(99, 102, 241, 0.12),
     transparent 55%
   );
 }
 
 .ambient-glow:hover,
 .ambient-glow:focus-within {
-  border-color: rgba(163, 230, 53, 0.36) !important;
-  box-shadow: 0 0 24px -2px rgba(163, 230, 53, 0.18), 0 8px 24px -6px rgba(0, 0, 0, 0.08);
+  border-color: rgba(99, 102, 241, 0.3) !important;
+  box-shadow: 0 0 24px -2px rgba(99, 102, 241, 0.14), 0 8px 24px -6px rgba(0, 0, 0, 0.08);
 }
 
 .dark .ambient-glow::before {
   background: radial-gradient(
     500px circle at var(--local-mouse-x, var(--mouse-x, 50%)) var(--local-mouse-y, var(--mouse-y, 50%)),
-    rgba(163, 230, 53, 0.1),
+    rgba(99, 102, 241, 0.08),
     transparent 50%
   );
   opacity: 0.6;
@@ -459,15 +462,15 @@ html[data-theme="light"]:not(.dark) .bg-slate-50 {
   opacity: 1;
   background: radial-gradient(
     650px circle at var(--local-mouse-x, var(--mouse-x, 50%)) var(--local-mouse-y, var(--mouse-y, 50%)),
-    rgba(163, 230, 53, 0.22),
+    rgba(99, 102, 241, 0.16),
     transparent 55%
   );
 }
 
 .dark .ambient-glow:hover,
 .dark .ambient-glow:focus-within {
-  border-color: rgba(163, 230, 53, 0.38) !important;
-  box-shadow: 0 0 30px -2px rgba(163, 230, 53, 0.24), 0 12px 32px -8px rgba(0, 0, 0, 0.6);
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  box-shadow: 0 0 28px -2px rgba(99, 102, 241, 0.2), 0 12px 32px -8px rgba(0, 0, 0, 0.6);
 }
 
 /* High Density Design Story Rings with Lime Accent */
@@ -576,6 +579,51 @@ html[data-theme="light"]:not(.dark) .bg-slate-50 {
     rgba(255, 255, 255, 0.1) 50%,
     rgba(255, 255, 255, 0) 80%
   );
+}
+
+/* Subtle Heartbeat Pulse Animation for Notification Icons */
+@keyframes notificationPulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0px rgba(244, 63, 94, 0));
+  }
+  35% {
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 4px rgba(244, 63, 94, 0.45));
+  }
+  50% {
+    transform: scale(1.04);
+    filter: drop-shadow(0 0 2px rgba(244, 63, 94, 0.25));
+  }
+  65% {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 3px rgba(244, 63, 94, 0.35));
+  }
+  80% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0px rgba(244, 63, 94, 0));
+  }
+}
+
+.animate-notification-pulse {
+  animation: notificationPulse 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  transform-origin: center center;
+}
+
+/* Subtle Badge Ping & Glow */
+@keyframes subtleBadgePulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.92;
+  }
+}
+
+.animate-badge-pulse {
+  animation: subtleBadgePulse 2.4s ease-in-out infinite;
 }
 
 

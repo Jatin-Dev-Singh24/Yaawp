@@ -10,7 +10,6 @@ import {
   ExternalLink,
   Printer,
   ChevronRight,
-  Sparkles,
   Info
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -246,7 +245,7 @@ export const MetaLegalModal: React.FC = () => {
             {/* Meta Subtitle & Intro */}
             <div className="p-4 rounded-xl bg-slate-100/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-2">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <Shield className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 <span className="text-xs font-bold text-slate-900 dark:text-white">
                   {currentDoc.metaSubtitle}
                 </span>

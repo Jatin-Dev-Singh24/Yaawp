@@ -11,10 +11,12 @@ import {
   Feather,
   Shield,
   UserPlus,
-  Settings
+  Settings,
+  Download
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 
 interface SidebarNavItem {
   id: string;
@@ -43,6 +45,7 @@ export const Sidebar: React.FC = () => {
     setIsCreateAccountModalOpen,
     t
   } = useApp();
+  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
 
   // Navigation order: Home -> Reels -> Messages -> Explore -> Notifications -> Create -> Profile
   const navItems: SidebarNavItem[] = [
@@ -142,12 +145,20 @@ export const Sidebar: React.FC = () => {
                     <Icon
                       className={`w-5 h-5 transition-transform group-hover:scale-105 ${
                         isActive ? 'stroke-[2.4px]' : 'stroke-[1.8px]'
+                      } ${
+                        item.id === 'notifications' && item.badge !== undefined
+                          ? 'animate-notification-pulse text-rose-500 dark:text-rose-400 fill-rose-500/20'
+                          : ''
                       }`}
                     />
                     {item.badge !== undefined && (
                       <span
                         id={`sidebar-badge-${item.id}`}
-                        className="absolute -top-2 -right-2.5 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-indigo-600 text-[9px] font-bold text-white leading-none shadow-sm ring-2 ring-white dark:ring-slate-900 transition-transform animate-in zoom-in-75"
+                        className={`absolute -top-2 -right-2.5 flex h-4 min-w-4 px-1 items-center justify-center rounded-full text-[9px] font-bold text-white leading-none shadow-sm ring-2 ring-white dark:ring-slate-900 transition-transform animate-in zoom-in-75 ${
+                          item.id === 'notifications'
+                            ? 'bg-rose-500 animate-badge-pulse'
+                            : 'bg-indigo-600'
+                        }`}
                       >
                         {item.badge > 99 ? '99+' : item.badge}
                       </span>
@@ -157,7 +168,11 @@ export const Sidebar: React.FC = () => {
 
                 <span className="hidden xl:inline text-sm">{item.label}</span>
                 {item.badge !== undefined ? (
-                  <span className="hidden xl:inline-flex ml-auto items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                  <span className={`hidden xl:inline-flex ml-auto items-center justify-center h-5 min-w-5 px-1.5 rounded-full border text-[11px] font-bold ${
+                    item.id === 'notifications'
+                      ? 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 animate-badge-pulse'
+                      : 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400'
+                  }`}>
                     {item.badge > 99 ? '99+' : item.badge}
                   </span>
                 ) : item.shortcut ? (
@@ -183,6 +198,19 @@ export const Sidebar: React.FC = () => {
           <UserPlus className="w-5 h-5 shrink-0" />
           <span className="hidden xl:inline text-xs font-bold">Add Account</span>
         </button>
+
+        {/* PWA Install Button (Chromium prompt or iOS helper) */}
+        {!isInstalled && (isInstallable || isIOS) && (
+          <button
+            id="sidebar-pwa-install-btn"
+            onClick={install}
+            className="flex items-center justify-center xl:justify-start space-x-3.5 p-2 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+            title="Install Yaawp as Progressive Web App"
+          >
+            <Download className="w-5 h-5 shrink-0 animate-bounce" />
+            <span className="hidden xl:inline text-xs font-bold">Install App</span>
+          </button>
+        )}
 
         {/* Yaawp Legal & Privacy Center */}
         <button

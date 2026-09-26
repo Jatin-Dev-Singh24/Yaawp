@@ -43,9 +43,9 @@ export const GlobalSearchModal: React.FC = () => {
   const [recentSearches, setRecentSearches] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(RECENT_SEARCHES_KEY);
-      return saved ? JSON.parse(saved) : ['design', '#cyberpunk', 'elena_visuals', '#minimalism'];
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return ['design', '#cyberpunk', 'elena_visuals', '#minimalism'];
+      return [];
     }
   });
 

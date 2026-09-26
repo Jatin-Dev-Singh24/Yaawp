@@ -188,20 +188,67 @@ CREATE POLICY "Users can manage own hidden profiles"
     WITH CHECK (auth.uid() = user_id);
 
 -- ==============================================================================
--- 9. Automatic Profile Creation Trigger on Auth Signup
+-- 9. Automatic Profile Creation Trigger on Auth Signup & Unique Username Enforcement
 -- ==============================================================================
+
+-- Helper function to sanitize a username: lowercase, letters, digits, underscore, period
+CREATE OR REPLACE FUNCTION public.sanitize_username_sql(raw_name TEXT)
+RETURNS TEXT AS $$
+BEGIN
+    RETURN regexp_replace(lower(trim(both from coalesce(raw_name, ''))), '[^a-z0-9_.]', '', 'g');
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- Trigger Function: Enforces unique username assignment and handles collisions cleanly
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+    base_user TEXT;
+    candidate_user TEXT;
+    counter INT := 0;
+    username_taken BOOLEAN;
 BEGIN
+    -- Determine base candidate username from metadata or email
+    base_user := public.sanitize_username_sql(
+        COALESCE(
+            NEW.raw_user_meta_data->>'username',
+            split_part(NEW.email, '@', 1),
+            'creator'
+        )
+    );
+    
+    IF length(base_user) < 3 THEN
+        base_user := 'user_' || substr(md5(NEW.id::text), 1, 6);
+    END IF;
+
+    candidate_user := base_user;
+
+    -- Loop to ensure candidate_user is strictly unique across public.profiles
+    LOOP
+        SELECT EXISTS (
+            SELECT 1 FROM public.profiles WHERE username = candidate_user AND id <> NEW.id
+        ) INTO username_taken;
+
+        IF NOT username_taken THEN
+            EXIT;
+        END IF;
+
+        counter := counter + 1;
+        candidate_user := substr(base_user, 1, 20) || '_' || counter::TEXT;
+    END LOOP;
+
     INSERT INTO public.profiles (id, username, name, avatar, email)
     VALUES (
         NEW.id,
-        COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)),
-        COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
+        candidate_user,
+        COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', candidate_user),
         COALESCE(NEW.raw_user_meta_data->>'avatar_url', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'),
         NEW.email
     )
-    ON CONFLICT (id) DO NOTHING;
+    ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        updated_at = NOW();
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -210,6 +257,74 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Trigger to validate uniqueness and format before INSERT or UPDATE on public.profiles
+CREATE OR REPLACE FUNCTION public.validate_profile_username()
+RETURNS TRIGGER AS $$
+DECLARE
+    clean_username TEXT;
+    conflict_found BOOLEAN;
+BEGIN
+    clean_username := public.sanitize_username_sql(NEW.username);
+
+    IF length(clean_username) < 3 THEN
+        RAISE EXCEPTION 'Username must be at least 3 characters long';
+    END IF;
+
+    IF length(clean_username) > 30 THEN
+        RAISE EXCEPTION 'Username cannot exceed 30 characters';
+    END IF;
+
+    NEW.username := clean_username;
+
+    -- Check uniqueness
+    SELECT EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE username = clean_username
+        AND id <> NEW.id
+    ) INTO conflict_found;
+
+    IF conflict_found THEN
+        RAISE EXCEPTION 'Username is already taken';
+    END IF;
+
+    NEW.updated_at := NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS enforce_profile_unique_username ON public.profiles;
+CREATE TRIGGER enforce_profile_unique_username
+    BEFORE INSERT OR UPDATE OF username ON public.profiles
+    FOR EACH ROW EXECUTE FUNCTION public.validate_profile_username();
+
+-- RPC Function: Check if a username is available (bypasses RLS securely without exposing other records)
+CREATE OR REPLACE FUNCTION public.check_username_available(check_username TEXT, exclude_user_id UUID DEFAULT NULL)
+RETURNS BOOLEAN AS $$
+DECLARE
+    clean_u TEXT;
+    is_taken BOOLEAN;
+BEGIN
+    clean_u := public.sanitize_username_sql(check_username);
+    IF length(clean_u) < 3 OR length(clean_u) > 30 THEN
+        RETURN FALSE;
+    END IF;
+
+    IF exclude_user_id IS NOT NULL THEN
+        SELECT EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE username = clean_u AND id <> exclude_user_id
+        ) INTO is_taken;
+    ELSE
+        SELECT EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE username = clean_u
+        ) INTO is_taken;
+    END IF;
+
+    RETURN NOT is_taken;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ==============================================================================
 -- 10. Enable Supabase Realtime for Posts & Profiles

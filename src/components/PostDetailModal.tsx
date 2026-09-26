@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   X,
   Heart,
@@ -103,6 +103,13 @@ export const PostDetailModal: React.FC = () => {
 
   if (!selectedPostForModal) return null;
   const post = selectedPostForModal;
+  const isOwnPost =
+    post.user.id === currentUser.id ||
+    Boolean(
+      post.user.username &&
+      currentUser.username &&
+      post.user.username.toLowerCase() === currentUser.username.toLowerCase()
+    );
 
   // Original post attribution extraction if quoted or reposted
   const originalAuthor = post.quotePost
@@ -124,6 +131,18 @@ export const PostDetailModal: React.FC = () => {
     ? (post.quotePost.mediaUrl || (post.quotePost.mediaUrls && post.quotePost.mediaUrls[0]) || '')
     : '';
   const originalPostId = post.quotePost?.id || post.originalPostId;
+
+  // Calculate total reactions count
+  const totalReactionsCount = useMemo(() => {
+    if (!post.reactions || Object.keys(post.reactions).length === 0) {
+      return post.likesCount || 0;
+    }
+    let count = 0;
+    Object.values(post.reactions).forEach(uids => {
+      count += Array.isArray(uids) ? uids.length : 1;
+    });
+    return Math.max(post.likesCount || 0, count);
+  }, [post.reactions, post.likesCount]);
 
   const handleQuoteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -273,7 +292,7 @@ export const PostDetailModal: React.FC = () => {
 
               {showOptionsMenu && (
                 <div className="absolute right-0 top-8 z-30 w-48 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-1.5 space-y-1 text-xs text-slate-800 dark:text-slate-200 animate-in fade-in">
-                  {post.user.id === currentUser.id ? (
+                  {isOwnPost ? (
                     <>
                       <button
                         onClick={() => {
@@ -364,7 +383,7 @@ export const PostDetailModal: React.FC = () => {
                     Copy Link
                   </button>
 
-                  {post.user.id !== currentUser.id && (
+                  {!isOwnPost && (
                     <>
                       <button
                         onClick={() => {
@@ -754,7 +773,14 @@ export const PostDetailModal: React.FC = () => {
 
             <div>
               <span className="text-xs font-bold text-slate-900 dark:text-white">
-                {post.likesCount.toLocaleString()} likes
+                {totalReactionsCount.toLocaleString()}{' '}
+                {totalReactionsCount === 1
+                  ? post.reactions && Object.keys(post.reactions).length > 0
+                    ? 'reaction'
+                    : 'like'
+                  : post.reactions && Object.keys(post.reactions).length > 0
+                  ? 'reactions'
+                  : 'likes'}
               </span>
               <span className="text-[10px] text-slate-400 dark:text-slate-500 block uppercase mt-0.5">
                 {post.timestamp}

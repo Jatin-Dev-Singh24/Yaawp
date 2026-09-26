@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { AuthCard } from './auth';
+import { AuthCard } from './auth/AuthCard';
 
 export const CreateAccountModal: React.FC = () => {
   const {

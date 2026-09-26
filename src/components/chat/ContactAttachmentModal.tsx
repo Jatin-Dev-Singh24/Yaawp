@@ -15,7 +15,7 @@ export const ContactAttachmentModal: React.FC<ContactAttachmentModalProps> = ({
   onClose,
   onSendContact,
 }) => {
-  const { users } = useApp();
+  const { allUsers } = useApp();
   const [activeTab, setActiveTab] = useState<'appUsers' | 'custom'>('appUsers');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedContact, setSelectedContact] = useState<ContactData | null>(null);
@@ -27,7 +27,7 @@ export const ContactAttachmentModal: React.FC<ContactAttachmentModalProps> = ({
 
   if (!isOpen) return null;
 
-  const filteredUsers = users.filter(u =>
+  const filteredUsers = allUsers.filter(u =>
     u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.username.toLowerCase().includes(searchQuery.toLowerCase())
   );

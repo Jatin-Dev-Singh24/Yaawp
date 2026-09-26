@@ -30,11 +30,13 @@ export function isVideoUrl(url?: string): boolean {
 
 /**
  * Converts any standard image (PNG, JPG, JPEG, GIF, SVG, BMP, WebP) to an optimized WebP image.
+ * Uses maxDimension 1200 and quality 0.78 to ensure crisp HD quality while keeping payload compact (~60-120KB)
+ * so it safely persists in offline cache and storage without QuotaExceededError.
  */
 export async function convertImageToWebP(
   input: File | Blob | string,
-  quality = 0.88,
-  maxDimension = 2048
+  quality = 0.78,
+  maxDimension = 1200
 ): Promise<ConvertedMediaResult> {
   return new Promise((resolve, reject) => {
     const img = new Image();

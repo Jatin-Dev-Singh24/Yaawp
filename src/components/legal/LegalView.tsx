@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import {
   Shield,
   FileText,
@@ -9,7 +9,7 @@ import {
   CheckCircle2,
   Printer,
   ChevronRight,
-  Sparkles,
+  ArrowLeft,
   ExternalLink,
   Download,
   Share2,
@@ -23,7 +23,11 @@ import { useApp } from '../../context/AppContext';
 import { ALL_LEGAL_DOCUMENTS } from '../../data/metaLegalDocuments';
 import { LegalDocType } from '../../types';
 
-export const LegalView: React.FC = () => {
+interface LegalViewProps {
+  isStandalone?: boolean;
+}
+
+export const LegalView: React.FC<LegalViewProps> = ({ isStandalone = false }) => {
   const {
     activeLegalDoc,
     setActiveLegalDoc,
@@ -243,6 +247,17 @@ export const LegalView: React.FC = () => {
       <header className="relative z-10 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-4 sm:px-8 py-4">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
+            {isStandalone && (
+              <Link
+                to="/"
+                id="legal-back-to-home-btn"
+                className="flex items-center gap-1.5 px-3 py-2 mr-1 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all shadow-xs shrink-0"
+                title="Back to Yaawp Home"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Home</span>
+              </Link>
+            )}
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center text-white shadow-md shrink-0">
               <Scale className="w-5 h-5" />
             </div>
@@ -424,7 +439,7 @@ export const LegalView: React.FC = () => {
           {/* Wrinkle Page Banner Card */}
           <div className="p-6 sm:p-8 rounded-3xl bg-white/85 dark:bg-slate-900/85 border border-slate-200/90 dark:border-slate-800/90 backdrop-blur-xs shadow-lg space-y-4">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-xs font-bold">
-              <Sparkles className="w-3.5 h-3.5" />
+              <Shield className="w-3.5 h-3.5" />
               Official Terms of Agreement
             </div>
 

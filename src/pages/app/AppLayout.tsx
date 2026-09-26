@@ -9,6 +9,7 @@ import { PostDetailModal } from '../../components/PostDetailModal';
 import { CreatePostModal } from '../../components/CreatePostModal';
 import { EditProfileModal } from '../../components/EditProfileModal';
 import { CreateAccountModal } from '../../components/CreateAccountModal';
+import { SetUsernameModal } from '../../components/auth/SetUsernameModal';
 import { AmbientCursor } from '../../components/AmbientCursor';
 import { SecurityModal } from '../../components/SecurityModal';
 import { BehindTheScenesModal } from '../../components/BehindTheScenesModal';
@@ -41,10 +42,17 @@ const tabToPath: Record<string, string> = {
 };
 
 export const AppLayout: React.FC = () => {
-  const { activeTab, setActiveTab } = useApp();
+  const { activeTab, setActiveTab, isAuthenticated } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const isInternalSync = useRef(false);
+
+  // Strict route protection: unauthenticated users cannot access /app/* (only public /app/legal)
+  useEffect(() => {
+    if (!isAuthenticated && location.pathname !== '/app/legal') {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, location.pathname, navigate]);
 
   // When location changes, update activeTab
   useEffect(() => {
@@ -67,8 +75,12 @@ export const AppLayout: React.FC = () => {
     }
   }, [activeTab]);
 
+  if (!isAuthenticated && location.pathname !== '/app/legal') {
+    return null;
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col md:flex-row transition-colors selection:bg-lime-500 selection:text-zinc-950 relative">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col md:flex-row transition-colors selection:bg-indigo-500 selection:text-white relative">
       {/* Ambient Cursor Aura for Dark Premium Theme */}
       <AmbientCursor />
 
@@ -92,6 +104,7 @@ export const AppLayout: React.FC = () => {
       <CreatePostModal />
       <EditProfileModal />
       <CreateAccountModal />
+      <SetUsernameModal />
       <SecurityModal />
       <BehindTheScenesModal />
       <GlobalSearchModal />

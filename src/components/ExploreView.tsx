@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Heart, MessageCircle, Film, Sparkles } from 'lucide-react';
+import { Search, Heart, MessageCircle, Film, Sparkles, Compass } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { EXPLORE_PRESETS } from '../data/mockData';
 import { Post } from '../types';
 
 export const ExploreView: React.FC = () => {
@@ -11,43 +10,14 @@ export const ExploreView: React.FC = () => {
 
   const categories = ['For you', 'Photography', 'Travel', 'Architecture', 'Food', 'Style', 'Nature'];
 
-  // Combined explore items (user posts + curated presets converted to posts format)
+  // Explore items derived solely from real user media posts (images & videos only, no text posts)
   const allExploreItems = useMemo(() => {
-    // Generate synthetic posts for explore presets so clicking them opens full interactive modal
-    const presetsAsPosts: Post[] = EXPLORE_PRESETS.map((exp, idx) => ({
-      id: `exp_post_${exp.id}`,
-      user: {
-        id: `exp_user_${idx}`,
-        username: `${exp.category.toLowerCase()}_master`,
-        name: `${exp.category} Curated`,
-        avatar: exp.mediaUrl,
-        isVerified: true
-      },
-      mediaUrls: [exp.mediaUrl],
-      caption: `Stunning ${exp.category.toLowerCase()} capture from our community creators. #explore #${exp.category.toLowerCase()} #visualart`,
-      location: exp.category,
-      timestamp: `${idx + 1}d ago`,
-      likesCount: exp.likesCount,
-      isLiked: false,
-      isSaved: false,
-      comments: [
-        {
-          id: `c_exp_${idx}`,
-          postId: `exp_post_${exp.id}`,
-          user: {
-            id: 'user_fan',
-            username: 'travel_lover',
-            name: 'Sam',
-            avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&h=200&q=80'
-          },
-          text: 'Incredible mood and lighting!',
-          timestamp: '2h',
-          likesCount: 3
-        }
-      ]
-    }));
-
-    return [...posts, ...presetsAsPosts];
+    return posts.filter(
+      p =>
+        !p.isTextPost &&
+        p.postType !== 'text' &&
+        ((p.mediaUrls && p.mediaUrls.length > 0 && Boolean(p.mediaUrls[0])) || Boolean(p.videoUrl))
+    );
   }, [posts]);
 
   // Filtered items
@@ -178,9 +148,14 @@ export const ExploreView: React.FC = () => {
       </div>
 
       {filteredItems.length === 0 && (
-        <div className="py-16 text-center text-neutral-400 dark:text-neutral-500">
-          <p className="text-sm font-semibold">No results found for "{searchQuery}"</p>
-          <p className="text-xs mt-1">Try searching for other keywords like tokyo, coffee, travel</p>
+        <div className="py-20 text-center text-slate-500">
+          <Compass className="w-10 h-10 mx-auto mb-3 text-slate-400 opacity-60" />
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            {searchQuery ? `No results found for "${searchQuery}"` : 'No posts to explore yet'}
+          </p>
+          <p className="text-xs mt-1 text-slate-400">
+            {searchQuery ? 'Try searching for other keywords' : 'Share moments with the community to populate the explore grid'}
+          </p>
         </div>
       )}
     </div>

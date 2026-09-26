@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { X, Eye, EyeOff, AlertCircle, Check, Sparkles, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
@@ -7,6 +7,11 @@ import { PeacockWatcher } from '../PeacockWatcher';
 import { UserProfile, LegalDocType } from '../../types';
 import { ChooseLanguageStep } from './ChooseLanguageStep';
 import { getLanguageByCode } from '../../translations';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
+import {
+  checkUsernameAvailability,
+  sanitizeUsername
+} from '../../utils/usernameValidation';
 
 interface AuthCardProps {
   initialMode?: 'login' | 'signup';
@@ -25,7 +30,6 @@ export const AuthCard: React.FC<AuthCardProps> = ({
   const {
     createAccount,
     loginWithSupabase,
-    continueAsGuest,
     userProfiles,
     switchAccount,
     showToast,
@@ -79,6 +83,14 @@ export const AuthCard: React.FC<AuthCardProps> = ({
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // hCaptcha state & refs
+  // Default test sitekey works in development/testing without secret key issues: 10000000-ffff-ffff-ffff-000000000001
+  const hcaptchaSiteKey = import.meta.env?.VITE_HCAPTCHA_SITEKEY || '10000000-ffff-ffff-ffff-000000000001';
+  const [loginCaptchaToken, setLoginCaptchaToken] = useState<string | null>(null);
+  const [signupCaptchaToken, setSignupCaptchaToken] = useState<string | null>(null);
+  const loginCaptchaRef = useRef<HCaptcha | null>(null);
+  const signupCaptchaRef = useRef<HCaptcha | null>(null);
+
   // Language Step (Required after signup)
   const [isLanguageStep, setIsLanguageStep] = useState(false);
   const [selectedLanguageCode, setSelectedLanguageCode] = useState<string>(() => preferredLanguage || 'en');
@@ -105,9 +117,55 @@ export const AuthCard: React.FC<AuthCardProps> = ({
     }
   };
 
+  // Signup live username check state
+  const [signupUsernameStatus, setSignupUsernameStatus] = useState<
+    'idle' | 'checking' | 'available' | 'taken' | 'invalid'
+  >('idle');
+  const [signupUsernameMessage, setSignupUsernameMessage] = useState<string | null>(null);
+  const [signupSuggestions, setSignupSuggestions] = useState<string[]>([]);
+  const usernameCheckTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const checkSignupUsernameAvailability = async (raw: string) => {
+    const clean = sanitizeUsername(raw);
+    if (!clean) {
+      setSignupUsernameStatus('idle');
+      setSignupUsernameMessage(null);
+      setSignupSuggestions([]);
+      return;
+    }
+    if (clean.length < 3) {
+      setSignupUsernameStatus('invalid');
+      setSignupUsernameMessage('Username must be at least 3 characters.');
+      setSignupSuggestions([]);
+      return;
+    }
+
+    setSignupUsernameStatus('checking');
+    try {
+      const res = await checkUsernameAvailability(clean, userProfiles);
+      if (!res.isValid) {
+        setSignupUsernameStatus('invalid');
+        setSignupUsernameMessage(res.error || 'Invalid username format.');
+        setSignupSuggestions(res.suggestions);
+      } else if (!res.isAvailable) {
+        setSignupUsernameStatus('taken');
+        setSignupUsernameMessage(res.error || `This username @${clean} is already taken.`);
+        setSignupSuggestions(res.suggestions);
+      } else {
+        setSignupUsernameStatus('available');
+        setSignupUsernameMessage(`@${clean} is available!`);
+        setSignupSuggestions([]);
+      }
+    } catch {
+      setSignupUsernameStatus('available');
+      setSignupUsernameMessage(null);
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      if (usernameCheckTimerRef.current) clearTimeout(usernameCheckTimerRef.current);
     };
   }, []);
 
@@ -125,6 +183,13 @@ export const AuthCard: React.FC<AuthCardProps> = ({
     typingTimerRef.current = setTimeout(() => {
       setIsTyping(false);
     }, 650);
+
+    if (field === 'username') {
+      if (usernameCheckTimerRef.current) clearTimeout(usernameCheckTimerRef.current);
+      usernameCheckTimerRef.current = setTimeout(() => {
+        checkSignupUsernameAvailability(value);
+      }, 350);
+    }
   };
 
   const handleFieldFocus = (field: 'username' | 'email' | 'password' | 'confirmPassword') => {
@@ -175,8 +240,10 @@ export const AuthCard: React.FC<AuthCardProps> = ({
           }
         }
 
-        const res = await loginWithSupabase(emailToUse, pass);
+        const res = await loginWithSupabase(emailToUse, pass, loginCaptchaToken || undefined);
         if (!res.success) {
+          loginCaptchaRef.current?.resetCaptcha();
+          setLoginCaptchaToken(null);
           const matchedProfile = profilesList.find(
             p => p.username.toLowerCase() === identifier.toLowerCase()
           );
@@ -201,7 +268,8 @@ export const AuthCard: React.FC<AuthCardProps> = ({
           switchAccount(matched.id);
           showToast(`Welcome back, @${matched.username}`);
         } else {
-          continueAsGuest();
+          setErrorMessage('No account found with this username or email. Please create an account via Sign Up.');
+          return;
         }
       }
 
@@ -257,9 +325,12 @@ export const AuthCard: React.FC<AuthCardProps> = ({
         agreedToPrivacy: agreedToLegal,
         agreedToCookies: agreedToLegal,
         agreedToCommunity: agreedToLegal,
+        captchaToken: signupCaptchaToken || undefined
       });
 
       if (!res.success) {
+        signupCaptchaRef.current?.resetCaptcha();
+        setSignupCaptchaToken(null);
         setErrorMessage(res.error || 'Failed to create account.');
         return;
       }
@@ -487,6 +558,25 @@ export const AuthCard: React.FC<AuthCardProps> = ({
               </div>
             </div>
 
+            {/* hCaptcha for Login */}
+            <div className="flex justify-center pt-2 overflow-hidden">
+              <HCaptcha
+                id="login-hcaptcha"
+                ref={loginCaptchaRef}
+                sitekey={hcaptchaSiteKey}
+                theme="dark"
+                size="normal"
+                onVerify={(token) => {
+                  setLoginCaptchaToken(token);
+                  setErrorMessage(null);
+                }}
+                onExpire={() => setLoginCaptchaToken(null)}
+                onError={() => {
+                  setLoginCaptchaToken(null);
+                }}
+              />
+            </div>
+
             {/* Submit Button */}
             <button
               id="login-submit-btn"
@@ -496,21 +586,6 @@ export const AuthCard: React.FC<AuthCardProps> = ({
             >
               {isSubmitting ? 'Entering...' : 'Log In'}
             </button>
-
-            {/* Quick Guest Explorer link */}
-            <div className="pt-2 text-center">
-              <button
-                type="button"
-                onClick={() => {
-                  continueAsGuest();
-                  if (onSuccess) onSuccess();
-                  else navigate('/app/home');
-                }}
-                className="text-[11px] tracking-[0.15em] uppercase text-zinc-500 hover:text-zinc-300 transition-colors font-light focus:outline-none cursor-pointer"
-              >
-                Continue as Guest
-              </button>
-            </div>
           </motion.form>
         ) : (
           /* --- SIGNUP FORM --- */
@@ -551,24 +626,88 @@ export const AuthCard: React.FC<AuthCardProps> = ({
 
             {/* Username field */}
             <div className="space-y-1">
-              <label
-                htmlFor="signup-username"
-                className="block text-[11px] tracking-[0.16em] uppercase font-light text-zinc-400"
-              >
-                Username
-              </label>
-              <input
-                id="signup-username"
-                type="text"
-                autoComplete="username"
-                value={signupUsername}
-                onChange={e => handleFieldChange('username', setSignupUsername, e.target.value)}
-                onFocus={() => handleFieldFocus('username')}
-                onBlur={handleFieldBlur}
-                placeholder="@yourhandle"
-                className="w-full bg-transparent border-b border-zinc-800 focus:border-zinc-300 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-700 focus:outline-none transition-colors duration-200 font-light"
-                required
-              />
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="signup-username"
+                  className="block text-[11px] tracking-[0.16em] uppercase font-light text-zinc-400"
+                >
+                  Username
+                </label>
+                {signupUsernameStatus === 'checking' && (
+                  <span className="text-[10px] text-zinc-500 flex items-center gap-1">
+                    <RefreshCw className="w-2.5 h-2.5 animate-spin" /> Checking...
+                  </span>
+                )}
+                {signupUsernameStatus === 'available' && (
+                  <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium">
+                    <Check className="w-2.5 h-2.5" /> Available
+                  </span>
+                )}
+                {signupUsernameStatus === 'taken' && (
+                  <span className="text-[10px] text-rose-400 flex items-center gap-1 font-medium">
+                    <AlertCircle className="w-2.5 h-2.5" /> Taken
+                  </span>
+                )}
+              </div>
+              <div className="relative flex items-center">
+                <input
+                  id="signup-username"
+                  type="text"
+                  autoComplete="username"
+                  value={signupUsername}
+                  onChange={e => handleFieldChange('username', setSignupUsername, e.target.value)}
+                  onFocus={() => handleFieldFocus('username')}
+                  onBlur={handleFieldBlur}
+                  placeholder="@yourhandle"
+                  className={`w-full bg-transparent border-b py-1.5 text-sm text-zinc-100 placeholder:text-zinc-700 focus:outline-none transition-colors duration-200 font-light ${
+                    signupUsernameStatus === 'available'
+                      ? 'border-emerald-500/80 focus:border-emerald-400'
+                      : signupUsernameStatus === 'taken' || signupUsernameStatus === 'invalid'
+                      ? 'border-rose-500/80 focus:border-rose-400'
+                      : 'border-zinc-800 focus:border-zinc-300'
+                  }`}
+                  required
+                />
+                <div className="absolute right-1">
+                  {signupUsernameStatus === 'available' ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : signupUsernameStatus === 'taken' ? (
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Taken username message & suggestions */}
+              {signupUsernameStatus === 'taken' && (
+                <div className="pt-1 space-y-1.5">
+                  <p className="text-[11px] text-rose-400 font-medium">
+                    {signupUsernameMessage || `This username is already taken.`}
+                  </p>
+                  {signupSuggestions.length > 0 && (
+                    <div className="bg-zinc-900/70 border border-zinc-800 p-2.5 rounded-lg space-y-1.5">
+                      <span className="text-[10px] text-zinc-400 flex items-center gap-1 font-medium">
+                        <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
+                        Available suggestions:
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {signupSuggestions.map(sug => (
+                          <button
+                            key={sug}
+                            type="button"
+                            onClick={() => {
+                              setSignupUsername(sug);
+                              checkSignupUsernameAvailability(sug);
+                            }}
+                            className="text-[11px] px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/60 hover:border-emerald-500/60 text-zinc-300 hover:text-emerald-300 font-mono transition-colors cursor-pointer"
+                          >
+                            @{sug}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Email field */}
@@ -743,6 +882,25 @@ export const AuthCard: React.FC<AuthCardProps> = ({
                   .
                 </span>
               </label>
+            </div>
+
+            {/* hCaptcha for Signup */}
+            <div className="flex justify-center pt-2 overflow-hidden">
+              <HCaptcha
+                id="signup-hcaptcha"
+                ref={signupCaptchaRef}
+                sitekey={hcaptchaSiteKey}
+                theme="dark"
+                size="normal"
+                onVerify={(token) => {
+                  setSignupCaptchaToken(token);
+                  setErrorMessage(null);
+                }}
+                onExpire={() => setSignupCaptchaToken(null)}
+                onError={() => {
+                  setSignupCaptchaToken(null);
+                }}
+              />
             </div>
 
             {/* Submit Button */}

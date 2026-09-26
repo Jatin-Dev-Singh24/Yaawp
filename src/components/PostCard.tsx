@@ -137,6 +137,13 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   };
 
   const isFollowingAuthor = followedUserIds.includes(post.user.id);
+  const isOwnPost =
+    post.user.id === currentUser.id ||
+    Boolean(
+      post.user.username &&
+      currentUser.username &&
+      post.user.username.toLowerCase() === currentUser.username.toLowerCase()
+    );
   const lastTapRef = useRef<number>(0);
 
   // Filter allowed emojis for reactions
@@ -453,6 +460,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
               src={post.mediaUrls[currentMediaIndex]}
               alt={`Post by ${post.user.username}`}
               onLoad={() => setIsImageLoaded(true)}
+              onError={() => setIsImageLoaded(true)}
               className={`w-full h-full object-cover transition-[transform,opacity] duration-300 ${
                 isImageLoaded ? 'opacity-100' : 'opacity-0'
               } ${post.filterClass || 'filter-normal'}`}
@@ -769,7 +777,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                   if (orig) setSelectedPostForModal(orig);
                 }
               }}
-              className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-850/90 hover:border-lime-400/50 ambient-glow transition-all cursor-pointer space-y-2 select-none"
+              className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-850/90 hover:border-indigo-400/50 ambient-glow transition-all cursor-pointer space-y-2 select-none"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -994,7 +1002,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
       {showMenuModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 text-sm text-slate-900 dark:text-white text-center animate-in fade-in zoom-in-95 duration-150 border border-slate-200 dark:border-slate-800">
-            {post.user.id === currentUser.id && (
+            {isOwnPost && (
               <>
                 <button
                   onClick={() => {
@@ -1068,30 +1076,34 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             >
               Quote Post
             </button>
-            <button
-              onClick={() => {
-                setShowMenuModal(false);
-                startConversationWithUser(post.user);
-              }}
-              className="w-full py-3.5 font-medium hover:bg-slate-50 dark:hover:bg-slate-800/60"
-            >
-              Send Direct Message
-            </button>
-            <button
-              onClick={() => {
-                toggleFollowUser(post.user.id);
-                setShowMenuModal(false);
-              }}
-              className={`w-full py-3.5 font-medium hover:bg-slate-50 dark:hover:bg-slate-800/60 ${
-                isFollowingAuthor
-                  ? 'text-rose-600 dark:text-rose-400'
-                  : 'text-indigo-600 dark:text-indigo-400'
-              }`}
-            >
-              {isFollowingAuthor
-                ? `Unfollow @${post.user.username}`
-                : `Follow @${post.user.username}`}
-            </button>
+            {!isOwnPost && (
+              <>
+                <button
+                  onClick={() => {
+                    setShowMenuModal(false);
+                    startConversationWithUser(post.user);
+                  }}
+                  className="w-full py-3.5 font-medium hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                >
+                  Send Direct Message
+                </button>
+                <button
+                  onClick={() => {
+                    toggleFollowUser(post.user.id);
+                    setShowMenuModal(false);
+                  }}
+                  className={`w-full py-3.5 font-medium hover:bg-slate-50 dark:hover:bg-slate-800/60 ${
+                    isFollowingAuthor
+                      ? 'text-rose-600 dark:text-rose-400'
+                      : 'text-indigo-600 dark:text-indigo-400'
+                  }`}
+                >
+                  {isFollowingAuthor
+                    ? `Unfollow @${post.user.username}`
+                    : `Follow @${post.user.username}`}
+                </button>
+              </>
+            )}
             <button
               onClick={() => {
                 toggleSavePost(post.id);
@@ -1107,7 +1119,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             >
               Copy link
             </button>
-            {post.user.id !== currentUser.id && (
+            {!isOwnPost && (
               <>
                 <button
                   id={`post-report-btn-${post.id}`}

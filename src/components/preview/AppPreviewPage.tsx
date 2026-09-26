@@ -4,15 +4,15 @@ import { HelpCircle, ArrowDown } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { FAQSection } from './FAQSection';
 import { LegalDocType } from '../../types';
+import { PWAInstallButton } from '../pwa/PWAInstallButton';
 
 export const AppPreviewPage: React.FC = () => {
-  const { isAuthenticated, setActiveLegalDoc, setActiveTab } = useApp();
+  const { isAuthenticated, setActiveLegalDoc } = useApp();
   const navigate = useNavigate();
 
   const navigateToLegalDoc = (doc: LegalDocType) => {
     setActiveLegalDoc(doc);
-    setActiveTab('legal');
-    navigate(`/app/legal?doc=${doc}`);
+    navigate(`/legal?doc=${doc}`);
   };
 
   const scrollToFaqs = () => {
@@ -32,15 +32,18 @@ export const AppPreviewPage: React.FC = () => {
         id="landing-header"
         className="w-full flex items-center justify-between z-10"
       >
-        <button
-          type="button"
-          id="landing-header-faqs-btn"
-          onClick={scrollToFaqs}
-          className="flex items-center gap-1.5 text-xs tracking-wider uppercase text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
-        >
-          <HelpCircle className="w-3.5 h-3.5" />
-          <span>FAQs</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            id="landing-header-faqs-btn"
+            onClick={scrollToFaqs}
+            className="flex items-center gap-1.5 text-xs tracking-wider uppercase text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span>FAQs</span>
+          </button>
+          <PWAInstallButton />
+        </div>
 
         <nav
           id="landing-auth-nav"
@@ -52,26 +55,28 @@ export const AppPreviewPage: React.FC = () => {
               <Link
                 to="/app/home"
                 id="landing-enter-feed-btn"
-                className="text-[12px] tracking-[0.2em] uppercase font-medium text-indigo-400 hover:text-indigo-300 transition-colors duration-300 cursor-pointer"
+                className="text-[12px] tracking-[0.2em] uppercase font-medium text-emerald-400 hover:text-emerald-300 transition-colors duration-300 cursor-pointer"
               >
                 Go to Feed →
               </Link>
-              <Link
-                to="/auth/login"
-                id="landing-login-signup-btn"
-                className="px-4 py-2 rounded-full border border-zinc-700 bg-zinc-900/90 hover:bg-zinc-800 text-xs sm:text-[13px] tracking-[0.16em] uppercase font-normal text-zinc-300 hover:text-white transition-all duration-300 cursor-pointer"
-              >
-                Login / Signup
-              </Link>
             </div>
           ) : (
-            <Link
-              to="/auth/login"
-              id="landing-login-signup-btn"
-              className="px-5 py-2 rounded-full border border-zinc-700 bg-zinc-900/90 hover:bg-zinc-800 text-xs sm:text-[13px] tracking-[0.18em] uppercase font-normal text-zinc-200 hover:text-white transition-all duration-300 cursor-pointer shadow-xs"
-            >
-              Login / Signup
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                to="/auth/login"
+                id="landing-login-btn"
+                className="px-4 py-2 text-xs sm:text-[13px] tracking-[0.16em] uppercase font-light text-zinc-300 hover:text-white transition-colors cursor-pointer"
+              >
+                Log In
+              </Link>
+              <Link
+                to="/auth/signup"
+                id="landing-signup-btn"
+                className="px-5 py-2 rounded-full border border-zinc-700 bg-zinc-900/90 hover:bg-zinc-800 text-xs sm:text-[13px] tracking-[0.18em] uppercase font-medium text-zinc-100 hover:text-white transition-all duration-300 cursor-pointer shadow-xs"
+              >
+                Sign Up
+              </Link>
+            </div>
           )}
         </nav>
       </header>
@@ -98,13 +103,32 @@ export const AppPreviewPage: React.FC = () => {
 
         {/* Prominent Login / Signup Action Button */}
         <div className="mt-8 flex flex-col sm:flex-row items-center gap-3.5">
-          <Link
-            to="/auth/login"
-            id="landing-center-login-signup-btn"
-            className="px-8 py-3 rounded-full bg-zinc-100 hover:bg-white text-zinc-950 text-xs sm:text-sm font-medium tracking-[0.16em] uppercase shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer"
-          >
-            Login / Signup
-          </Link>
+          {isAuthenticated ? (
+            <Link
+              to="/app/home"
+              id="landing-enter-feed-main-btn"
+              className="px-8 py-3 rounded-full bg-zinc-100 hover:bg-white text-zinc-950 text-xs sm:text-sm font-medium tracking-[0.16em] uppercase shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer"
+            >
+              Enter App →
+            </Link>
+          ) : (
+            <>
+              <Link
+                to="/auth/signup"
+                id="landing-center-signup-btn"
+                className="px-8 py-3 rounded-full bg-zinc-100 hover:bg-white text-zinc-950 text-xs sm:text-sm font-medium tracking-[0.16em] uppercase shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer"
+              >
+                Sign Up to Enter
+              </Link>
+              <Link
+                to="/auth/login"
+                id="landing-center-login-btn"
+                className="px-6 py-3 rounded-full border border-zinc-800 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs sm:text-sm font-normal tracking-[0.16em] uppercase transition-all duration-200 cursor-pointer"
+              >
+                Log In
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Scroll indicator to FAQs */}
@@ -129,7 +153,7 @@ export const AppPreviewPage: React.FC = () => {
       >
         <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-6 gap-y-2">
           <Link
-            to="/app/legal?doc=privacy"
+            to="/legal?doc=privacy"
             id="footer-privacy-policy-btn"
             onClick={e => {
               e.preventDefault();
@@ -141,7 +165,7 @@ export const AppPreviewPage: React.FC = () => {
           </Link>
           <span className="text-zinc-700 hidden sm:inline">•</span>
           <Link
-            to="/app/legal?doc=terms"
+            to="/legal?doc=terms"
             id="footer-terms-of-use-btn"
             onClick={e => {
               e.preventDefault();
@@ -153,7 +177,7 @@ export const AppPreviewPage: React.FC = () => {
           </Link>
           <span className="text-zinc-700 hidden sm:inline">•</span>
           <Link
-            to="/app/legal?doc=cookies"
+            to="/legal?doc=cookies"
             id="footer-cookie-uses-btn"
             onClick={e => {
               e.preventDefault();
@@ -165,7 +189,7 @@ export const AppPreviewPage: React.FC = () => {
           </Link>
           <span className="text-zinc-700 hidden sm:inline">•</span>
           <Link
-            to="/app/legal?doc=community"
+            to="/legal?doc=community"
             id="footer-community-guidelines-btn"
             onClick={e => {
               e.preventDefault();

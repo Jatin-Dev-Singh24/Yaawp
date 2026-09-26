@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   X,
   Bookmark,
@@ -30,9 +30,11 @@ import {
   Moon,
   Plus,
   UserCheck,
-  Palette
+  Palette,
+  Upload
 } from 'lucide-react';
 import { useApp, AppThemePreset, LIGHT_THEMES } from '../context/AppContext';
+import { convertImageToWebP } from '../utils/mediaConverter';
 import { INITIAL_LANGUAGES, getLanguageByCode } from '../translations';
 import { ChangeSecretCodeModal } from './chat/ChangeSecretCodeModal';
 import { CustomPfpConfig, AvatarAudience } from '../types';
@@ -186,6 +188,26 @@ export const ProfileSettingsModal: React.FC = () => {
       ...prev,
       customUsernames: (prev.customUsernames || []).filter(u => u !== username)
     }));
+  };
+
+  const profilePfpFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleProfilePfpFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const result = await convertImageToWebP(file);
+      setCurrentActiveConfig(prev => ({ ...prev, url: result.dataUrl, hasNoPfp: false }));
+      showToast('Profile picture uploaded from device!');
+    } catch {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const res = reader.result as string;
+        setCurrentActiveConfig(prev => ({ ...prev, url: res, hasNoPfp: false }));
+        showToast('Profile picture uploaded!');
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleToggleListedUser = (userId: string) => {
@@ -1143,12 +1165,30 @@ export const ProfileSettingsModal: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Avatar Image URL Input (if not No PFP) */}
+                {/* Avatar Image URL & Device File Selection */}
+                <input
+                  ref={profilePfpFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleProfilePfpFileChange}
+                />
+
                 {!currentActiveConfig.hasNoPfp && (
                   <div className="space-y-1.5 pt-1">
-                    <label className="block text-[11px] font-bold text-slate-700 dark:text-zinc-300">
-                      Image URL for {currentActiveConfig.label}
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-zinc-300">
+                        {currentActiveConfig.label} Photo
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => profilePfpFileInputRef.current?.click()}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                      >
+                        <Upload className="w-3 h-3" />
+                        <span>Select from Device</span>
+                      </button>
+                    </div>
                     <input
                       type="text"
                       value={currentActiveConfig.url || ''}
@@ -1156,8 +1196,8 @@ export const ProfileSettingsModal: React.FC = () => {
                         const val = e.target.value;
                         setCurrentActiveConfig(prev => ({ ...prev, url: val }));
                       }}
-                      placeholder="https://images.unsplash.com/photo-..."
-                      className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-lime-500"
+                      placeholder="Or enter direct image URL..."
+                      className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
                     />
 
                     {/* Quick Avatar Presets */}

@@ -31,9 +31,12 @@ import {
   Bookmark,
   Trash2,
   BarChart2,
-  Plus
+  Plus,
+  Film,
+  Scissors
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { ReelsEditor } from './ReelsEditor';
 import { PostDraft, StoryPoll } from '../types';
 import { FILTER_PRESETS, PRESET_CREATION_PHOTOS } from '../data/mockData';
 import { uploadMediaToSupabase } from '../lib/supabaseStorage';
@@ -60,10 +63,13 @@ export const CreatePostModal: React.FC = () => {
     currentUser,
     createPost,
     createStory,
+    createReel,
     customCircles,
     communities,
     showToast
   } = useApp();
+
+  const [showReelsEditor, setShowReelsEditor] = useState(false);
 
   const [step, setStep] = useState<'media' | 'crop' | 'filter' | 'caption'>('media');
   const [selectedImage, setSelectedImage] = useState<string>('');
@@ -439,7 +445,7 @@ export const CreatePostModal: React.FC = () => {
           undefined,
           currentUser.id
         );
-        if (uploadRes.url) {
+        if (uploadRes.url && !uploadRes.url.startsWith('blob:')) {
           finalMediaUrl = uploadRes.url;
         }
       }
@@ -458,7 +464,7 @@ export const CreatePostModal: React.FC = () => {
           mediaUrls: postCategory === 'text' ? [] : (finalMediaUrl ? [finalMediaUrl] : []),
           videoUrl: isVideo ? (finalVideoUrl || finalMediaUrl) : undefined,
           isTextPost: postCategory === 'text',
-          textPostTheme: undefined,
+          textPostTheme: postCategory === 'text' ? textPostTheme : undefined,
           postType: postCategory === 'text' ? 'text' : isVideo ? 'video' : 'image',
           caption: caption.trim() || (postCategory === 'text' ? textPostContent.trim() : ''),
           location: location.trim() || undefined,
@@ -741,11 +747,11 @@ export const CreatePostModal: React.FC = () => {
           {step === 'media' && (
             <div className="flex flex-col items-center justify-center py-2">
               {/* Mode Switcher Tabs */}
-              <div className="flex items-center justify-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl mb-6 w-full max-w-xs border border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl mb-6 w-full max-w-sm border border-slate-200 dark:border-slate-700">
                 <button
                   type="button"
                   onClick={() => setPostCategory('media')}
-                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
                     postCategory === 'media'
                       ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
                       : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
@@ -757,7 +763,7 @@ export const CreatePostModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setPostCategory('text')}
-                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
                     postCategory === 'text'
                       ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
                       : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
@@ -765,6 +771,15 @@ export const CreatePostModal: React.FC = () => {
                 >
                   <FileText className="w-3.5 h-3.5" />
                   <span>Text Post</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowReelsEditor(true)}
+                  className="flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 text-lime-600 dark:text-lime-400 hover:bg-lime-500/10 transition-all"
+                  title="Open Reels Editor with trimming & soundtrack selection"
+                >
+                  <Film className="w-3.5 h-3.5" />
+                  <span>Create Reel</span>
                 </button>
               </div>
 
@@ -818,39 +833,41 @@ export const CreatePostModal: React.FC = () => {
                     />
                   </div>
 
-                  {/* Preset Gallery */}
-                  <div className="w-full mt-7">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                          Or select from aesthetic presets
-                        </span>
+                  {/* Preset Gallery - only if presets exist */}
+                  {PRESET_CREATION_PHOTOS.length > 0 && (
+                    <div className="w-full mt-7">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                            Or select from aesthetic presets
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                        {PRESET_CREATION_PHOTOS.map((preset, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSelectPreset(preset.url, preset.location)}
+                            className="group relative aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-indigo-500"
+                          >
+                            <img
+                              src={preset.url}
+                              alt={preset.title}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-end p-1.5 transition-opacity">
+                              <span className="text-[10px] font-medium text-white truncate">
+                                {preset.title}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                      {PRESET_CREATION_PHOTOS.map((preset, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => handleSelectPreset(preset.url, preset.location)}
-                          className="group relative aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-indigo-500"
-                        >
-                          <img
-                            src={preset.url}
-                            alt={preset.title}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-end p-1.5 transition-opacity">
-                            <span className="text-[10px] font-medium text-white truncate">
-                              {preset.title}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  )}
                 </>
               )}
 
@@ -1157,14 +1174,24 @@ export const CreatePostModal: React.FC = () => {
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                       Your video will play smoothly across feed cards with a high-speed poster thumbnail.
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setStep('caption')}
-                      className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5"
-                    >
-                      <span>Continue to Details</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex flex-col gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowReelsEditor(true)}
+                        className="w-full py-2 px-3 bg-neutral-900 hover:bg-neutral-800 text-lime-400 border border-lime-500/30 font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <Scissors className="w-3.5 h-3.5 text-lime-400" />
+                        <span>Trim & Add Music in Reels Editor</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStep('caption')}
+                        className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <span>Continue to Details</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <>
@@ -1871,6 +1898,30 @@ export const CreatePostModal: React.FC = () => {
             setIsKitchenOpen(false);
           }}
           insertButtonLabel="Insert into Caption"
+        />
+      )}
+
+      {/* Reels Editor with Clip Trimming & Audio Track Selection */}
+      {showReelsEditor && (
+        <ReelsEditor
+          initialVideoUrl={selectedImage || undefined}
+          initialVideoFile={selectedFile || null}
+          onClose={() => setShowReelsEditor(false)}
+          onPublish={reelData => {
+            createReel({
+              mediaUrl: reelData.videoUrl,
+              caption: reelData.caption,
+              musicTitle: reelData.musicTitle,
+              durationSeconds: reelData.duration,
+              filterClass: reelData.filterClass,
+              trimStart: reelData.trimStart,
+              trimEnd: reelData.trimEnd,
+              audioTrackUrl: reelData.audioTrackUrl,
+              audioTrackId: reelData.audioTrackId
+            });
+            setShowReelsEditor(false);
+            resetAndClose();
+          }}
         />
       )}
     </div>

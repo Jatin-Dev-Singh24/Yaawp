@@ -17,7 +17,8 @@ import {
   Layers,
   Sliders,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { StoriesBar } from './StoriesBar';
@@ -27,11 +28,15 @@ import { CommunityJoinButton } from './CommunityJoinButton';
 import { AlgorithmSettingsModal } from './AlgorithmSettingsModal';
 import { CustomCirclesModal } from './CustomCirclesModal';
 import { NearbyActivitiesModal } from './NearbyActivitiesModal';
-import { FeedPostSkeleton } from './SkeletonScreens';
+import { FeedPostSkeleton, HomePageFeedSkeleton } from './SkeletonScreens';
 import { PullToRefresh } from './PullToRefresh';
 import { useApp } from '../context/AppContext';
 
-export const FeedView: React.FC = () => {
+interface FeedViewProps {
+  isLoading?: boolean;
+}
+
+export const FeedView: React.FC<FeedViewProps> = ({ isLoading = false }) => {
   const {
     feedPosts,
     posts,
@@ -53,7 +58,8 @@ export const FeedView: React.FC = () => {
     setActiveTab,
     customCircles,
     activeCustomCircleId,
-    setActiveCustomCircleId
+    setActiveCustomCircleId,
+    setIsCreateModalOpen
   } = useApp();
 
   const [showAlgorithmModal, setShowAlgorithmModal] = useState(false);
@@ -61,6 +67,7 @@ export const FeedView: React.FC = () => {
   const [showNearbyModal, setShowNearbyModal] = useState(false);
   const [isFilterTransitioning, setIsFilterTransitioning] = useState(false);
   const [isTuneFeedCollapsed, setIsTuneFeedCollapsed] = useState(false);
+  const [isTestingSkeleton, setIsTestingSkeleton] = useState(false);
 
   // Smooth content skeleton transition when switching algorithm filters
   useEffect(() => {
@@ -171,6 +178,10 @@ export const FeedView: React.FC = () => {
 
   const rotationDeg = Math.min(180, (pullDistance / PULL_THRESHOLD) * 180);
   const isPastThreshold = pullDistance >= PULL_THRESHOLD;
+
+  if (isLoading || isTestingSkeleton) {
+    return <HomePageFeedSkeleton />;
+  }
 
   return (
     <div
@@ -307,6 +318,20 @@ export const FeedView: React.FC = () => {
               >
                 {isOffline ? <WifiOff className="w-3 h-3" /> : <Wifi className="w-3 h-3" />}
                 <span>{isOffline ? 'Sim: Offline' : 'Test Offline'}</span>
+              </button>
+
+              {/* Skeleton screen preview button */}
+              <button
+                id="preview-feed-skeleton-btn"
+                onClick={() => {
+                  setIsTestingSkeleton(true);
+                  setTimeout(() => setIsTestingSkeleton(false), 1400);
+                }}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-lg font-semibold bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                title="Preview full skeleton screen loader"
+              >
+                <Layers className="w-3 h-3 text-indigo-500" />
+                <span>Skeleton</span>
               </button>
             </div>
           </div>
@@ -540,62 +565,80 @@ export const FeedView: React.FC = () => {
               id="feed-empty-state"
               className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-8 text-center space-y-4 mb-6 shadow-xs"
             >
-              <div className="w-14 h-14 rounded-full bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center mx-auto text-indigo-600 dark:text-indigo-400">
+              <div className="w-14 h-14 rounded-full bg-lime-50 dark:bg-lime-950/40 flex items-center justify-center mx-auto text-lime-600 dark:text-lime-400">
                 <Users className="w-7 h-7" />
               </div>
               <div className="space-y-1">
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  No posts from followed accounts yet
+                  {posts.length === 0 ? 'No posts yet' : 'No posts matching this view'}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                  Follow creators below to customize your feed with their latest posts, or switch to All Posts.
+                  {posts.length === 0
+                    ? 'Your feed is clean and ready. Share your very first photo or thought with the community!'
+                    : 'Follow creators to customize your feed with their latest posts, or switch to All Posts.'}
                 </p>
               </div>
 
-              {/* Recommended Creators to follow */}
-              <div className="pt-2 space-y-2 max-w-xs mx-auto text-left">
-                {allUsers
-                  .filter(u => u.id !== currentUser.id && !followedUserIds.includes(u.id))
-                  .slice(0, 3)
-                  .map(creator => (
-                    <div
-                      key={creator.id}
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <img
-                          src={creator.avatar}
-                          alt={creator.username}
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                        <div>
-                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                            {creator.username}
-                          </p>
-                          <p className="text-[10px] text-slate-400 truncate max-w-[120px]">
-                            {creator.name}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => toggleFollowUser(creator.id)}
-                        className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-                      >
-                        <UserPlus className="w-3 h-3" />
-                        Follow
-                      </button>
-                    </div>
-                  ))}
+              {/* Action Button */}
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <button
+                  type="button"
+                  id="feed-empty-create-post-btn"
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="px-5 py-2.5 rounded-full bg-lime-500 hover:bg-lime-400 text-zinc-950 text-xs font-semibold tracking-wider uppercase transition-colors inline-flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Create First Post</span>
+                </button>
+                {posts.length > 0 && feedMode !== 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => setFeedMode('all')}
+                    className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-3 py-2 cursor-pointer"
+                  >
+                    View All Community Posts →
+                  </button>
+                )}
               </div>
 
-              <div className="pt-2">
-                <button
-                  onClick={() => setFeedMode('all')}
-                  className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
-                >
-                  View All Community Posts →
-                </button>
-              </div>
+              {/* Recommended Creators to follow if any other creators exist */}
+              {allUsers.filter(u => u.id !== currentUser.id && !followedUserIds.includes(u.id)).length > 0 && (
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2 max-w-xs mx-auto text-left">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center mb-2">Suggested Creators</p>
+                  {allUsers
+                    .filter(u => u.id !== currentUser.id && !followedUserIds.includes(u.id))
+                    .slice(0, 3)
+                    .map(creator => (
+                      <div
+                        key={creator.id}
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <img
+                            src={creator.avatar}
+                            alt={creator.username}
+                            className="w-8 h-8 rounded-full object-cover"
+                          />
+                          <div>
+                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                              {creator.username}
+                            </p>
+                            <p className="text-[10px] text-slate-400 truncate max-w-[120px]">
+                              {creator.name}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => toggleFollowUser(creator.id)}
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                        >
+                          <UserPlus className="w-3 h-3" />
+                          Follow
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
             </div>
           )}
 

@@ -194,12 +194,12 @@ export const PeacockWatcher: React.FC<PeacockWatcherProps> = ({
   }, []);
 
   // Spring physics transition
-  const smoothTransition = prefersReducedMotion
+  const smoothTransition: any = prefersReducedMotion
     ? { duration: 0 }
     : { type: 'spring', stiffness: 140, damping: 18, mass: 0.85 };
 
   // Wing transition: multi-keyframe flutter uses easeInOut tween, while eye cover/rest uses spring
-  const wingTransition = prefersReducedMotion
+  const wingTransition: any = prefersReducedMotion
     ? { duration: 0 }
     : isFlapped
     ? { duration: 0.65, ease: 'easeInOut' }

@@ -1,8 +1,13 @@
+// AI Studio environment constraint: HMR disabled to prevent WebSocket failures in Cloud Run iframe
+process.env.DISABLE_HMR = "true";
+
 import express from "express";
+import http from "http";
 import path from "path";
 
 async function startServer() {
   const app = express();
+  const server = http.createServer(app);
   const PORT = 3000;
   const isProduction =
     process.env.NODE_ENV === "production" ||
@@ -27,19 +32,27 @@ async function startServer() {
   if (!isProduction) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(process.cwd(), "dist");
+    const indexPath = path.join(distPath, "index.html");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      res.sendFile(indexPath, (err) => {
+        if (err && !res.headersSent) {
+          res.status(500).send("Application index.html could not be served.");
+        }
+      });
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT} (production: ${isProduction})`);
   });
 }

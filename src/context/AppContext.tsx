@@ -70,6 +70,10 @@ import {
   SUPPORT_BOT_SUGGESTED_PROMPTS,
   getAutomatedBotResponse
 } from '../utils/supportBot';
+import {
+  checkUsernameAvailability,
+  sanitizeUsername
+} from '../utils/usernameValidation';
 
 export type TabType = 'feed' | 'explore' | 'communities' | 'messages' | 'profile' | 'notifications' | 'reels' | 'settings' | 'legal';
 export type FeedSortAlgorithm = 'chronological' | 'engagement' | 'balanced' | 'trending';
@@ -118,7 +122,7 @@ interface AppContextType {
   unreadNotifsCount: number;
   unreadMessagesCount: number;
   activeStoryUserIndex: number | null;
-  setActiveStoryUserIndex: (index: number | null) => void;
+  setActiveStoryUserIndex: React.Dispatch<React.SetStateAction<number | null>>;
   selectedPostForModal: Post | null;
   setSelectedPostForModal: (post: Post | null) => void;
   isCreateModalOpen: boolean;
@@ -155,8 +159,27 @@ interface AppContextType {
     isScheduled?: boolean;
     scheduledPublishTime?: string;
   }) => void;
-  createStory: (mediaUrl: string, caption?: string, poll?: StoryPoll, isTextStory?: boolean, storyTheme?: string) => void;
+  createStory: (
+    mediaUrlOrConfig: string | { mediaUrl: string; caption?: string; poll?: StoryPoll; isTextStory?: boolean; storyTheme?: string },
+    caption?: string,
+    poll?: StoryPoll,
+    isTextStory?: boolean,
+    storyTheme?: string
+  ) => void;
   voteStoryPoll: (storyId: string, optionId: string) => void;
+  createReel: (reelData: {
+    mediaUrl: string;
+    caption: string;
+    musicTitle?: string;
+    thumbnailUrl?: string;
+    durationSeconds?: number;
+    filterClass?: string;
+    trimStart?: number;
+    trimEnd?: number;
+    audioTrackUrl?: string;
+    audioTrackId?: string;
+  }) => void;
+  deleteReel: (reelId: string) => void;
   toggleLikeReel: (reelId: string) => void;
   toggleSaveReel: (reelId: string) => void;
   addReelComment: (reelId: string, text: string, parentId?: string) => void;
@@ -303,6 +326,8 @@ interface AppContextType {
   setIsBehindTheScenesOpen: (open: boolean) => void;
   chatPasscode: string | null;
   setChatPasscode: (pin: string | null) => void;
+  securitySettings?: { isPasscodeEnabled: boolean; passcode?: string };
+  updateSecuritySettings: (settings: { isPasscodeEnabled?: boolean; passcode?: string }) => void;
   isChatLocked: boolean;
   setIsChatLocked: (locked: boolean) => void;
   unlockChat: (pin: string) => boolean;
@@ -367,11 +392,12 @@ interface AppContextType {
   authModalMode: 'signup' | 'login';
   setAuthModalMode: (mode: 'signup' | 'login') => void;
   openAuthModal: (mode?: 'signup' | 'login') => void;
-  continueAsGuest: () => void;
   createAccount: (data: NewAccountRegistration) => Promise<{ success: boolean; error?: string }> | { success: boolean; error?: string };
   switchAccount: (userId: string) => void;
-  loginWithSupabase: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithSupabase: (email: string, password: string, captchaToken?: string) => Promise<{ success: boolean; error?: string }>;
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  deactivateAccount: (reason?: string) => void;
+  isAccountDeactivated: boolean;
   // 3-Bar Profile Settings & Navigation
   isProfileMenuOpen: boolean;
   setIsProfileMenuOpen: (open: boolean) => void;
@@ -452,6 +478,9 @@ interface AppContextType {
   setPreferredLanguage: (code: string) => void;
   currentLanguageOption: LanguageOption;
   t: (key: TranslationKey) => string;
+  // Username onboarding prompt
+  isUsernameSetupRequired: boolean;
+  setIsUsernameSetupRequired: (req: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -460,6 +489,38 @@ const LEGACY_STORAGE_KEY = 'instagram_app_state_v1';
 const LOCAL_STORAGE_KEY = 'yaawp_app_state_v1';
 export const FEED_OFFLINE_CACHE_KEY = 'yaawp_feed_offline_cache_v2';
 export const FEED_OFFLINE_META_KEY = 'yaawp_feed_offline_meta_v2';
+const INTERACTION_STORE_KEY = 'yaawp_post_interactions_v2';
+
+const getStoredInteractions = (): Record<string, {
+  reactions?: Record<string, string[] | number>;
+  userReaction?: string;
+  likesCount?: number;
+  isLiked?: boolean;
+  isSaved?: boolean;
+}> => {
+  try {
+    const raw = localStorage.getItem(INTERACTION_STORE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+const savePostInteraction = (postId: string, interaction: {
+  reactions?: Record<string, string[] | number>;
+  userReaction?: string;
+  likesCount?: number;
+  isLiked?: boolean;
+  isSaved?: boolean;
+}) => {
+  try {
+    const all = getStoredInteractions();
+    all[postId] = { ...(all[postId] || {}), ...interaction };
+    localStorage.setItem(INTERACTION_STORE_KEY, JSON.stringify(all));
+  } catch (err) {
+    console.warn('Could not save post interaction:', err);
+  }
+};
 
 const getStoredStateItem = (subKey: string): string | null => {
   try {
@@ -484,6 +545,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     let isMounted = true;
 
+    const handleUserSessionSync = async (user: any) => {
+      if (!user) return;
+      const meta = user.user_metadata || {};
+      const email = user.email || '';
+      const fallbackHandle = email ? sanitizeUsername(email.split('@')[0]) : 'creator';
+      const userHandle = sanitizeUsername(meta.username || '') || fallbackHandle;
+      const userName = meta.full_name || meta.name || userHandle;
+      const userAvatar = meta.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&h=400&q=80';
+
+      // 1. Try to fetch persistent profile from Supabase profiles table
+      let dbProfile: any = null;
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (!error && data) {
+          dbProfile = data;
+        }
+      } catch (err) {
+        console.warn('Could not fetch profile from Supabase:', err);
+      }
+
+      const existingProfile = dbProfile || (Object.values(userProfiles) as UserProfile[]).find(
+        p => p.id === user.id || (p.email && p.email.toLowerCase() === email.toLowerCase())
+      );
+
+      const resolvedHandle = existingProfile?.username || userHandle;
+      const updatedUser: UserProfile = {
+        ...(existingProfile || {}),
+        id: user.id,
+        email,
+        name: existingProfile?.name || userName,
+        username: resolvedHandle,
+        avatar: existingProfile?.avatar || userAvatar,
+        bio: existingProfile?.bio || 'Connected via Google Account ✨',
+        website: existingProfile?.website || '',
+        followersCount: existingProfile?.followersCount ?? 0,
+        followingCount: existingProfile?.followingCount ?? 0,
+        postsCount: existingProfile?.postsCount ?? 0,
+        highlights: existingProfile?.highlights || [],
+        isVerified: existingProfile?.isVerified ?? false
+      };
+
+      setCurrentUser(updatedUser);
+      setUserProfiles(prev => ({
+        ...prev,
+        [user.id]: updatedUser
+      }));
+      setIsAuthenticated(true);
+      localStorage.setItem('yaawp_authenticated', 'true');
+
+      // Check if user still needs to pick a personalized unique handle
+      const customUsernamePicked = localStorage.getItem(`yaawp_custom_username_${user.id}`);
+      if (!meta.username && (!existingProfile?.username || existingProfile.username === fallbackHandle) && !customUsernamePicked) {
+        setIsUsernameSetupRequired(true);
+      }
+    };
+
     // Check active session on load
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (!isMounted) return;
@@ -493,16 +614,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (session) {
         setSupabaseSession(session);
-        if (session.user) {
-          setCurrentUser(prev => ({
-            ...prev,
-            id: session.user.id || prev.id,
-            email: session.user.email,
-            name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || prev.name,
-            username: session.user.user_metadata?.username || (session.user.email ? session.user.email.split('@')[0] : prev.username),
-            avatar: session.user.user_metadata?.avatar_url || prev.avatar
-          }));
-        }
+        handleUserSessionSync(session.user);
       }
     });
 
@@ -511,14 +623,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!isMounted) return;
       setSupabaseSession(session);
       if (session?.user) {
-        setCurrentUser(prev => ({
-          ...prev,
-          id: session.user.id || prev.id,
-          email: session.user.email,
-          name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || prev.name,
-          username: session.user.user_metadata?.username || (session.user.email ? session.user.email.split('@')[0] : prev.username),
-          avatar: session.user.user_metadata?.avatar_url || prev.avatar
-        }));
+        handleUserSessionSync(session.user);
       }
     });
 
@@ -547,37 +652,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         if (data && isMounted && data.length > 0) {
-          const mappedPosts: Post[] = data.map((row: any) => ({
-            id: row.id,
-            user: {
-              id: row.user_id,
-              username: currentUser.username,
-              name: currentUser.name,
-              avatar: currentUser.avatar,
-              isVerified: currentUser.isVerified
-            },
-            mediaUrls: [row.media_url],
-            caption: row.caption || '',
-            location: row.location || undefined,
-            tags: row.tags || [],
-            timestamp: new Date(row.created_at).toLocaleDateString(),
-            createdAt: new Date(row.created_at).getTime(),
-            likesCount: 0,
-            isLiked: false,
-            isSaved: false,
-            filterClass: row.filter_class || 'filter-normal',
-            comments: [],
-            allowsRepost: true,
-            audience: (row.audience as Post['audience']) || 'everyone',
-            score: 0,
-            upvotes: 0,
-            downvotes: 0
-          }));
+          const mappedPosts: Post[] = data.map((row: any) => {
+            const isText =
+              row.media_type === 'text' ||
+              !row.media_url ||
+              row.media_url.includes('photo-1516035069371-29a1b244cc32');
+
+            return {
+              id: row.id,
+              user: {
+                id: row.user_id,
+                username: currentUser.username,
+                name: currentUser.name,
+                avatar: currentUser.avatar,
+                isVerified: currentUser.isVerified
+              },
+              mediaUrls: isText ? [] : (row.media_url ? [row.media_url] : []),
+              isTextPost: isText,
+              postType: isText ? 'text' : (row.media_type === 'video' ? 'video' : 'image'),
+              caption: row.caption || '',
+              location: row.location || undefined,
+              tags: row.tags || [],
+              timestamp: new Date(row.created_at).toLocaleDateString(),
+              createdAt: new Date(row.created_at).getTime(),
+              likesCount: 0,
+              isLiked: false,
+              isSaved: false,
+              filterClass: row.filter_class || 'filter-normal',
+              comments: [],
+              allowsRepost: true,
+              audience: (row.audience as Post['audience']) || 'everyone',
+              score: 0,
+              upvotes: 0,
+              downvotes: 0
+            };
+          });
 
           setPosts(prev => {
+            const interactions = getStoredInteractions();
+            const prevMap = new Map<string, Post>(prev.map(p => [p.id, p]));
+            const mergedSupabase = mappedPosts.map(sp => {
+              const existing = prevMap.get(sp.id);
+              const inter = interactions[sp.id];
+              if (existing) {
+                return {
+                  ...sp,
+                  isTextPost: existing.isTextPost ?? sp.isTextPost,
+                  textPostTheme: existing.textPostTheme,
+                  mediaUrls: existing.isTextPost ? [] : (existing.mediaUrls?.length ? existing.mediaUrls : sp.mediaUrls),
+                  likesCount: Math.max(existing.likesCount || 0, inter?.likesCount || 0, sp.likesCount || 0),
+                  isLiked: existing.isLiked || inter?.isLiked || sp.isLiked,
+                  isSaved: existing.isSaved || inter?.isSaved || sp.isSaved,
+                  isReposted: existing.isReposted,
+                  repostsCount: existing.repostsCount,
+                  reactions: existing.reactions || inter?.reactions || sp.reactions,
+                  userReaction: existing.userReaction || inter?.userReaction || sp.userReaction,
+                  comments: existing.comments && existing.comments.length > 0 ? existing.comments : sp.comments,
+                };
+              } else if (inter) {
+                return {
+                  ...sp,
+                  reactions: inter.reactions ?? sp.reactions,
+                  userReaction: inter.userReaction ?? sp.userReaction,
+                  likesCount: Math.max(inter.likesCount ?? 0, sp.likesCount ?? 0),
+                  isLiked: inter.isLiked ?? sp.isLiked,
+                  isSaved: inter.isSaved ?? sp.isSaved
+                };
+              }
+              return sp;
+            });
             const supabaseIds = new Set(mappedPosts.map(p => p.id));
             const existingNonSupabase = prev.filter(p => !supabaseIds.has(p.id));
-            return [...mappedPosts, ...existingNonSupabase];
+            return [...mergedSupabase, ...existingNonSupabase];
           });
         }
       } catch (err) {
@@ -598,6 +744,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const newRow = payload.new as any;
             setPosts(prev => {
               if (prev.some(p => p.id === newRow.id)) return prev;
+              const isText =
+                newRow.media_type === 'text' ||
+                !newRow.media_url ||
+                newRow.media_url.includes('photo-1516035069371-29a1b244cc32');
               const newP: Post = {
                 id: newRow.id,
                 user: {
@@ -607,7 +757,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   avatar: currentUser.avatar,
                   isVerified: currentUser.isVerified
                 },
-                mediaUrls: [newRow.media_url],
+                mediaUrls: isText ? [] : (newRow.media_url ? [newRow.media_url] : []),
+                isTextPost: isText,
+                postType: isText ? 'text' : (newRow.media_type === 'video' ? 'video' : 'image'),
                 caption: newRow.caption || '',
                 location: newRow.location || undefined,
                 tags: newRow.tags || [],
@@ -763,20 +915,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Currently viewed user profile (defaults to currentUser)
   const [viewedUserId, setViewedUserId] = useState<string>(currentUser.id);
 
+  // Automatic one-time cleanup to ensure all legacy dummy posts and cached demo data are purged for real pilot users
+  if (typeof window !== 'undefined') {
+    const PURGE_KEY = 'yaawp_pilot_clean_storage_v2';
+    if (!localStorage.getItem(PURGE_KEY)) {
+      try {
+        localStorage.removeItem('yaawp_authenticated');
+        localStorage.removeItem(FEED_OFFLINE_CACHE_KEY);
+        localStorage.removeItem('lumina_feed_offline_cache_v2');
+        localStorage.removeItem(`${LOCAL_STORAGE_KEY}_posts`);
+        localStorage.removeItem(`${LOCAL_STORAGE_KEY}_stories`);
+        localStorage.removeItem(`${LOCAL_STORAGE_KEY}_reels`);
+        localStorage.removeItem('instagram_app_state_v1_posts');
+        localStorage.removeItem('instagram_app_state_v1_stories');
+        localStorage.removeItem('instagram_app_state_v1_reels');
+        localStorage.setItem(PURGE_KEY, 'true');
+      } catch {}
+    }
+  }
+
   const [posts, setPosts] = useState<Post[]>(() => {
     try {
-      const offlineCached = localStorage.getItem(FEED_OFFLINE_CACHE_KEY) || localStorage.getItem('lumina_feed_offline_cache_v2');
-      if (offlineCached) {
-        const parsed = JSON.parse(offlineCached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
       const saved = getStoredStateItem('posts');
+      const interactions = getStoredInteractions();
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          // Keep only legitimate user created posts and heal any camera corrupted text posts
+          const clean = parsed
+            .filter(
+              (p: any) =>
+                p &&
+                !p.id.startsWith('post_curr_') &&
+                !p.id.startsWith('exp_post_') &&
+                !['post_1', 'post_2', 'post_3', 'post_4', 'post_5', 'post_6', 'post_7'].includes(p.id)
+            )
+            .map((p: any) => {
+              const inter = interactions[p.id];
+              let healed = p;
+              if (
+                p.mediaUrls?.[0]?.includes('photo-1516035069371-29a1b244cc32') &&
+                (p.isTextPost || p.postType === 'text' || !p.caption?.includes('#camera'))
+              ) {
+                healed = {
+                  ...p,
+                  isTextPost: true,
+                  postType: 'text',
+                  mediaUrls: []
+                };
+              }
+              if (inter) {
+                return {
+                  ...healed,
+                  reactions: inter.reactions ?? healed.reactions,
+                  userReaction: inter.userReaction !== undefined ? inter.userReaction : healed.userReaction,
+                  isLiked: inter.isLiked !== undefined ? inter.isLiked : healed.isLiked,
+                  likesCount: inter.likesCount !== undefined ? inter.likesCount : healed.likesCount,
+                  isSaved: inter.isSaved !== undefined ? inter.isSaved : healed.isSaved
+                };
+              }
+              return healed;
+            });
+          return clean;
         }
       }
     } catch {
@@ -786,13 +986,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [stories, setStories] = useState<Story[]>(() => {
-    const saved = getStoredStateItem('stories');
-    return saved ? JSON.parse(saved) : INITIAL_STORIES;
+    try {
+      const saved = getStoredStateItem('stories');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter(
+            (s: any) =>
+              s &&
+              !['story_current', 'story_elena', 'story_marco', 'story_kai', 'story_sophia', 'story_david'].includes(s.id)
+          );
+        }
+      }
+    } catch {}
+    return INITIAL_STORIES;
   });
 
   const [reels, setReels] = useState<Reel[]>(() => {
-    const saved = getStoredStateItem('reels');
-    return saved ? JSON.parse(saved) : INITIAL_REELS;
+    try {
+      const saved = getStoredStateItem('reels');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter((r: any) => r && !['reel_1', 'reel_2', 'reel_3', 'reel_4', 'reel_5'].includes(r.id));
+        }
+      }
+    } catch {}
+    return INITIAL_REELS;
   });
 
   const TWENTY_DAYS_MS = 20 * 24 * 60 * 60 * 1000;
@@ -810,7 +1030,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const saved = getStoredStateItem('notifications');
-    const raw: NotificationItem[] = saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
+    let raw: NotificationItem[] = saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
+    if (!raw || raw.length === 0) {
+      raw = INITIAL_NOTIFICATIONS;
+    }
     // Auto-delete notifications older than 20 days
     return raw
       .filter(n => !isNotificationOlderThan20Days(n))
@@ -850,11 +1073,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const isBotDeleted = localStorage.getItem('yaawp_support_bot_deleted') === 'true';
 
+    const DUMMY_CONV_IDS = new Set(['conv_sophia', 'conv_elena', 'conv_kai', 'conv_david', 'conv_marco', 'conv_group_creatives', 'conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']);
+
     const saved = getStoredStateItem('conversations');
     if (saved) {
       try {
         const parsed: ChatConversation[] = JSON.parse(saved);
-        const enriched: ChatConversation[] = parsed.map(c => ({
+        const filtered = parsed.filter(c => c && !DUMMY_CONV_IDS.has(c.id));
+        const enriched: ChatConversation[] = filtered.map(c => ({
           ...c,
           isPinned: c.id === 'conv_support_bot' ? false : Boolean(c.isPinned),
           messages: c.messages.map(m => {
@@ -864,25 +1090,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return m;
           })
         }));
-        let filtered: ChatConversation[] = enriched;
+        let list: ChatConversation[] = enriched;
         if (isBotDeleted) {
-          filtered = filtered.filter(c => c.id !== 'conv_support_bot');
+          list = list.filter(c => c.id !== 'conv_support_bot');
+        } else if (!list.some(c => c.id === 'conv_support_bot')) {
+          list.push(buildSupportBotConv(0));
         }
-        const existingIds = new Set(filtered.map(c => c.id));
-        let merged: ChatConversation[] = [...filtered];
-        if (!isBotDeleted && !existingIds.has('conv_support_bot')) {
-          merged.push(buildSupportBotConv(0));
-        }
-        const missing = INITIAL_CONVERSATIONS.filter(c => !existingIds.has(c.id) && c.id !== 'conv_support_bot');
-        merged = [...merged, ...missing];
-        const hasAnyUnread = merged.some(c => c.unreadCount > 0);
-        if (!hasAnyUnread) {
-          const sophia = merged.find(c => c.id === 'conv_sophia');
-          if (sophia) {
-            sophia.unreadCount = 2;
-          }
-        }
-        return merged;
+        return list;
       } catch {
         // fallback to INITIAL_CONVERSATIONS
       }
@@ -896,7 +1110,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [activeConvId, setActiveConvId] = useState<string>(() => {
     const firstNonBot = conversations.find(c => c.id !== 'conv_support_bot');
-    return firstNonBot?.id || conversations[0]?.id || 'conv_1';
+    return firstNonBot?.id || conversations[0]?.id || '';
   });
   const activeConvIdRef = useRef<string>(activeConvId);
   useEffect(() => {
@@ -950,16 +1164,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved === 'true';
   });
   const [authModalMode, setAuthModalMode] = useState<'signup' | 'login'>('signup');
+  const [isUsernameSetupRequired, setIsUsernameSetupRequired] = useState<boolean>(() => {
+    return localStorage.getItem('yaawp_needs_username_prompt') === 'true';
+  });
 
   const openAuthModal = (mode: 'signup' | 'login' = 'signup') => {
     setAuthModalMode(mode);
     setIsCreateAccountModalOpen(true);
-  };
-
-  const continueAsGuest = () => {
-    setIsAuthenticated(true);
-    localStorage.setItem('yaawp_authenticated', 'true');
-    showToast('Welcome to YAAWP!');
   };
 
   // Communities, Discussions, Challenges State
@@ -1176,36 +1387,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   ]);
 
-  const [joinRequests, setJoinRequests] = useState<CommunityJoinRequest[]>([
-    {
-      id: 'req_1',
-      communityId: 'comm_1',
-      communityName: 'Street Photographers Club',
-      user: {
-        id: 'user_alex',
-        username: 'alex_rivera',
-        name: 'Alex Rivera',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&h=400&q=80'
-      },
-      message: 'Excited to share 35mm film captures and join critiques!',
-      requestedAt: '10m ago',
-      status: 'pending'
-    },
-    {
-      id: 'req_2',
-      communityId: 'comm_2',
-      communityName: 'Cinematic Visuals & Grading',
-      user: {
-        id: 'user_elena',
-        username: 'elena_rostova',
-        name: 'Elena Rostova',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&h=400&q=80'
-      },
-      message: 'Looking to connect with fellow Davinci Resolve colorists.',
-      requestedAt: '1h ago',
-      status: 'pending'
-    }
-  ]);
+  const [joinRequests, setJoinRequests] = useState<CommunityJoinRequest[]>([]);
 
   // Algorithmic Recommendation & Feed Controls State
   const [algorithmSettings, setAlgorithmSettings] = useState<AlgorithmSettings>(() => {
@@ -1279,39 +1461,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return JSON.parse(saved);
       } catch {}
     }
-    return {
-      'comm_film_ch_film_general': [
-        {
-          id: 'msg_f1',
-          communityId: 'comm_film',
-          channelId: 'ch_film_general',
-          user: {
-            id: 'user_elena',
-            username: 'elena_art',
-            name: 'Elena Rostova',
-            avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&h=200&q=80',
-            isVerified: true
-          },
-          text: 'Anyone experimenting with Rodinal stand development on Tri-X lately? The contrast curve at 1:100 is pure magic.',
-          createdAt: Date.now() - 3600000,
-          reactions: { '🔥': ['user_current', 'user_kai'], '📷': ['user_david'] }
-        },
-        {
-          id: 'msg_f2',
-          communityId: 'comm_film',
-          channelId: 'ch_film_general',
-          user: {
-            id: 'user_david',
-            username: 'david_urban',
-            name: 'David Chen',
-            avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=200&h=200&q=80'
-          },
-          text: 'I pushed HP5 to 1600 last weekend in Tokyo rain. Grain is noticeable but highlights held up beautifully!',
-          createdAt: Date.now() - 1800000,
-          reactions: { '❤️': ['user_elena'] }
-        }
-      ]
-    };
+    return {};
   });
 
   // Offline & Feed Caching Layer
@@ -1425,7 +1575,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     try {
       localStorage.setItem(`${LOCAL_STORAGE_KEY}_posts`, JSON.stringify(posts));
-      localStorage.setItem(FEED_OFFLINE_CACHE_KEY, JSON.stringify(posts));
       const now = Date.now();
       setFeedCacheTimestamp(now);
       localStorage.setItem(FEED_OFFLINE_META_KEY, JSON.stringify({
@@ -1433,7 +1582,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         count: posts.length
       }));
     } catch {
-      // Safe fallback on quota error
+      // Graceful quota recovery: prune old redundant keys and store essential compact posts
+      try {
+        localStorage.removeItem(FEED_OFFLINE_CACHE_KEY);
+        const compactPosts = posts.slice(0, 30);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_posts`, JSON.stringify(compactPosts));
+      } catch {
+        try {
+          const ultraCompact = posts.slice(0, 20).map((p, idx) => {
+            if (idx > 3 && p.mediaUrls && p.mediaUrls.some(u => u && u.length > 50000)) {
+              return { ...p, mediaUrls: [] };
+            }
+            return p;
+          });
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_posts`, JSON.stringify(ultraCompact));
+        } catch {}
+      }
     }
   }, [posts]);
 
@@ -1723,10 +1887,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map(p => {
         if (p.id === postId) {
           const wasLiked = p.isLiked;
+          const nextLiked = !wasLiked;
+          const nextCount = wasLiked ? Math.max(0, p.likesCount - 1) : p.likesCount + 1;
+          savePostInteraction(postId, {
+            isLiked: nextLiked,
+            likesCount: nextCount
+          });
           return {
             ...p,
-            isLiked: !wasLiked,
-            likesCount: wasLiked ? p.likesCount - 1 : p.likesCount + 1
+            isLiked: nextLiked,
+            likesCount: nextCount
           };
         }
         return p;
@@ -1740,6 +1910,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (p.id === postId) {
           const nextSaved = !p.isSaved;
           showToast(nextSaved ? 'Saved to collection' : 'Removed from collection');
+          savePostInteraction(postId, {
+            isSaved: nextSaved
+          });
           return {
             ...p,
             isSaved: nextSaved
@@ -2157,13 +2330,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Persist to Supabase when connected and authenticated
     if (isSupabaseConfigured && supabaseSession?.user?.id) {
+      const isText = effectivePostType === 'text' || Boolean(data.isTextPost);
+      const postMediaUrl = isText ? '' : (data.mediaUrls?.[0] || '');
       supabase
         .from('posts')
         .insert({
           user_id: supabaseSession.user.id,
           caption: data.caption,
-          media_url: data.mediaUrls[0] || 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80',
-          media_type: 'image',
+          media_url: postMediaUrl,
+          media_type: isText ? 'text' : (data.videoUrl ? 'video' : 'image'),
           filter_class: data.filterClass || 'filter-normal',
           tags: data.caption.match(/#[a-zA-Z0-9_]+/g) || [],
           location: data.location || null,
@@ -2202,12 +2377,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createStory = (
-    mediaUrl: string,
+    mediaUrlOrConfig: string | { mediaUrl: string; caption?: string; poll?: StoryPoll; isTextStory?: boolean; storyTheme?: string },
     caption?: string,
     poll?: StoryPoll,
     isTextStory?: boolean,
     storyTheme?: string
   ) => {
+    let finalMediaUrl: string;
+    let finalCaption = caption;
+    let finalPoll = poll;
+    let finalIsTextStory = isTextStory;
+    let finalStoryTheme = storyTheme;
+
+    if (typeof mediaUrlOrConfig === 'object' && mediaUrlOrConfig !== null) {
+      finalMediaUrl = mediaUrlOrConfig.mediaUrl;
+      finalCaption = mediaUrlOrConfig.caption ?? caption;
+      finalPoll = mediaUrlOrConfig.poll ?? poll;
+      finalIsTextStory = mediaUrlOrConfig.isTextStory ?? isTextStory;
+      finalStoryTheme = mediaUrlOrConfig.storyTheme ?? storyTheme;
+    } else {
+      finalMediaUrl = String(mediaUrlOrConfig);
+    }
+
     const newStory: Story = {
       id: `story_${Date.now()}`,
       user: {
@@ -2216,13 +2407,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         name: currentUser.name,
         avatar: currentUser.avatar
       },
-      mediaUrl,
+      mediaUrl: finalMediaUrl,
       timestamp: 'Just now',
       seen: false,
-      caption,
-      poll,
-      isTextStory,
-      storyTheme
+      caption: finalCaption,
+      poll: finalPoll,
+      isTextStory: finalIsTextStory,
+      storyTheme: finalStoryTheme
     };
 
     setStories(prev => [newStory, ...prev.filter(s => s.user.id !== currentUser.id)]);
@@ -2249,6 +2440,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       })
     );
+  };
+
+  const createReel = (reelData: {
+    mediaUrl: string;
+    caption: string;
+    musicTitle?: string;
+    thumbnailUrl?: string;
+    durationSeconds?: number;
+    filterClass?: string;
+    trimStart?: number;
+    trimEnd?: number;
+    audioTrackUrl?: string;
+    audioTrackId?: string;
+  }) => {
+    const newReel: Reel = {
+      id: `reel_${Date.now()}`,
+      user: {
+        id: currentUser.id,
+        username: currentUser.username,
+        name: currentUser.name,
+        avatar: currentUser.avatar
+      },
+      mediaUrl: reelData.mediaUrl,
+      thumbnailUrl: reelData.thumbnailUrl,
+      durationSeconds: reelData.durationSeconds || 15,
+      caption: reelData.caption || '',
+      musicTitle: reelData.musicTitle || 'Original Audio',
+      likesCount: 0,
+      commentsCount: 0,
+      sharesCount: 0,
+      isLiked: false,
+      isSaved: false,
+      filterClass: reelData.filterClass || 'filter-normal',
+      trimStart: reelData.trimStart,
+      trimEnd: reelData.trimEnd,
+      audioTrackUrl: reelData.audioTrackUrl,
+      audioTrackId: reelData.audioTrackId,
+      comments: []
+    };
+
+    setReels(prev => [newReel, ...prev]);
+    showToast('Reel published to your profile & Reels feed!');
+  };
+
+  const deleteReel = (reelId: string) => {
+    setReels(prev => prev.filter(r => r.id !== reelId));
+    showToast('Reel deleted');
   };
 
   const toggleLikeReel = (reelId: string) => {
@@ -2388,6 +2626,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const toggleFollowUser = (userId: string) => {
+    if (
+      userId === currentUser.id ||
+      (userProfiles[userId] &&
+        userProfiles[userId].username?.toLowerCase() === currentUser.username?.toLowerCase())
+    ) {
+      showToast("You cannot follow your own account");
+      return;
+    }
     const isCurrentlyFollowing = followedUserIds.includes(userId);
     const nextFollowed = isCurrentlyFollowing
       ? followedUserIds.filter(id => id !== userId)
@@ -2437,7 +2683,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const simulateIncomingMessage = (senderId?: string, customText?: string) => {
-    const sender = senderId ? (Object.values(USERS).find(u => u.id === senderId) || USERS.sophia_vogue) : USERS.sophia_vogue;
+    const sender = senderId
+      ? ((Object.values(USERS) as UserSummary[]).find(u => u.id === senderId) || ((Object.values(userProfiles) as UserProfile[]).find(u => u.id === senderId) as any))
+      : ((Object.values(USERS) as UserSummary[])[0] || ((Object.values(userProfiles) as UserProfile[])[0] as any));
     if (!sender) return;
     const convId = `conv_${sender.username.replace('@', '')}`;
     const newMsg: ChatMessage = {
@@ -2739,29 +2987,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (m.id !== messageId || !m.pollData) return m;
             const poll = m.pollData;
             const alreadyVotedThis = poll.options.some(
-              opt => opt.id === optionId && opt.voters.includes(currentUser.id)
+              opt => opt.id === optionId && (opt.voters || []).includes(currentUser.id)
             );
 
             const updatedOptions = poll.options.map(opt => {
+              const currentVotes = typeof opt.votes === 'number' ? opt.votes : 0;
+              const voters = opt.voters || [];
               if (opt.id === optionId) {
                 if (alreadyVotedThis) {
                   return {
                     ...opt,
-                    votes: Math.max(0, opt.votes - 1),
-                    voters: opt.voters.filter(id => id !== currentUser.id),
+                    votes: Math.max(0, currentVotes - 1),
+                    voters: voters.filter(id => id !== currentUser.id),
                   };
                 } else {
                   return {
                     ...opt,
-                    votes: opt.votes + 1,
-                    voters: [...opt.voters, currentUser.id],
+                    votes: currentVotes + 1,
+                    voters: [...voters, currentUser.id],
                   };
                 }
-              } else if (!poll.isMultipleChoice && !alreadyVotedThis && opt.voters.includes(currentUser.id)) {
+              } else if (!poll.isMultipleChoice && !alreadyVotedThis && voters.includes(currentUser.id)) {
                 return {
                   ...opt,
-                  votes: Math.max(0, opt.votes - 1),
-                  voters: opt.voters.filter(id => id !== currentUser.id),
+                  votes: Math.max(0, currentVotes - 1),
+                  voters: voters.filter(id => id !== currentUser.id),
                 };
               }
               return opt;
@@ -2828,19 +3078,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
 
-    if (isSupabaseConfigured && supabaseSession?.user?.id) {
+    if (isSupabaseConfigured && (supabaseSession?.user?.id || currentUser.id)) {
+      const targetUserId = supabaseSession?.user?.id || currentUser.id;
       supabase
         .from('profiles')
-        .update({
-          name: data.name,
-          username: data.username,
-          bio: data.bio,
-          website: data.website,
-          avatar: data.avatar
+        .upsert({
+          id: targetUserId,
+          name: data.name ?? currentUser.name,
+          username: data.username ?? currentUser.username,
+          bio: data.bio ?? currentUser.bio,
+          website: data.website ?? currentUser.website,
+          avatar: data.avatar ?? currentUser.avatar,
+          updated_at: new Date().toISOString()
         })
-        .eq('id', supabaseSession.user.id)
         .then(({ error }) => {
-          if (error) console.warn('Supabase profile update notice:', error.message);
+          if (error) console.warn('Supabase profile update/upsert notice:', error.message);
         });
     }
 
@@ -2921,14 +3173,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
-    const cleanUsername = data.username.toLowerCase().trim();
-    const existing = (Object.values(userProfiles) as UserProfile[]).find(
-      (u: UserProfile) => u.username.toLowerCase() === cleanUsername
-    );
-    if (existing) {
+    const cleanUsername = sanitizeUsername(data.username);
+    const availability = await checkUsernameAvailability(cleanUsername, userProfiles);
+    if (!availability.isAvailable) {
+      const suggestionsText = availability.suggestions.length > 0
+        ? ` Available suggestions: ${availability.suggestions.map(s => '@' + s).join(', ')}`
+        : '';
       return {
         success: false,
-        error: `The username @${cleanUsername} is already taken. Please choose another.`
+        error: (availability.error || `The username @${cleanUsername} is already taken.`) + suggestionsText
       };
     }
 
@@ -2940,6 +3193,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           email: data.contact.trim(),
           password: data.password.trim(),
           options: {
+            captchaToken: data.captchaToken,
             data: {
               username: cleanUsername,
               full_name: data.name.trim(),
@@ -4818,11 +5072,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSupabaseSession(null);
     setIsProfileMenuOpen(false);
     setIsAuthenticated(false);
+    setIsUsernameSetupRequired(false);
     localStorage.removeItem('yaawp_authenticated');
+    localStorage.removeItem('yaawp_needs_username_prompt');
     showToast('Signed out of session');
   };
 
-  const loginWithSupabase = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const loginWithSupabase = async (email: string, password: string, captchaToken?: string): Promise<{ success: boolean; error?: string }> => {
     if (!isSupabaseConfigured) {
       return {
         success: false,
@@ -4832,7 +5088,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
-        password: password.trim()
+        password: password.trim(),
+        options: {
+          captchaToken
+        }
       });
 
       if (error) {
@@ -4890,25 +5149,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Client-mode Google sign-in fallback with verified profile
     const googleEmail = 'jatindevsingh644@gmail.com';
-    const googleUsername = 'jatindev';
+    const rawUsername = 'jatindev';
     const googleName = 'Jatin Dev Singh';
     const googleAvatar = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
 
     const existing = (Object.values(userProfiles) as UserProfile[]).find(
-      p => p.email?.toLowerCase() === googleEmail.toLowerCase() || p.username.toLowerCase() === googleUsername.toLowerCase()
+      p => p.email?.toLowerCase() === googleEmail.toLowerCase()
     );
 
     if (existing) {
       switchAccount(existing.id);
       setIsAuthenticated(true);
+      localStorage.setItem('yaawp_authenticated', 'true');
       showToast(`Welcome back via Google, @${existing.username}`);
       return { success: true };
+    }
+
+    // Determine initial handle, ensure it is unique
+    let chosenUsername = sanitizeUsername(rawUsername);
+    const availability = await checkUsernameAvailability(chosenUsername, userProfiles);
+    if (!availability.isAvailable) {
+      chosenUsername = availability.suggestions[0] || `${chosenUsername}_${Date.now().toString().slice(-4)}`;
     }
 
     const newUserId = `user_google_${Date.now()}`;
     const newGoogleUser: UserProfile = {
       id: newUserId,
-      username: googleUsername,
+      username: chosenUsername,
       name: googleName,
       avatar: googleAvatar,
       bio: 'Connected via Google Account ✨',
@@ -4927,10 +5194,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
     setCurrentUser(newGoogleUser);
     setIsAuthenticated(true);
+    localStorage.setItem('yaawp_authenticated', 'true');
     setHasAgreedToTerms(true);
     setTermsAgreedTimestamp(Date.now());
+    // Trigger username onboarding prompt for new Google account
+    setIsUsernameSetupRequired(true);
     showToast(`Signed in with Google as ${googleEmail}`);
     return { success: true };
+  };
+
+  const [isAccountDeactivated, setIsAccountDeactivated] = useState<boolean>(() => {
+    return localStorage.getItem('yaawp_account_deactivated') === 'true';
+  });
+
+  const deactivateAccount = (reason = 'Taking a temporary break') => {
+    setIsAccountDeactivated(true);
+    localStorage.setItem('yaawp_account_deactivated', 'true');
+    localStorage.setItem('yaawp_deactivation_reason', reason);
+    localStorage.removeItem('yaawp_authenticated');
+    setIsAuthenticated(false);
+    showToast('Your account is now deactivated. Log in at any time to reactivate.');
   };
 
   // Algorithmic Feed & Recommendations
@@ -5174,7 +5457,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Social Presence ("Currently")
   const updatePresenceStatus = (status: Partial<PresenceStatus>) => {
     setPresenceStatus(prev => {
-      const next = { ...prev, ...status, updatedAt: Date.now() };
+      const next = { ...prev, ...status, updatedAt: new Date().toISOString() };
       try {
         localStorage.setItem('lumina_presence_status', JSON.stringify(next));
       } catch {}
@@ -5188,21 +5471,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPosts(prev =>
       prev.map(p => {
         if (p.id === postId) {
-          const reactions = { ...(p.reactions || {}) };
+          const reactions: { [emoji: string]: string[] | number } = { ...(p.reactions || {}) };
           const userReaction = p.userReaction === reactionEmoji ? undefined : reactionEmoji;
 
           // Remove old userReaction if present
           if (p.userReaction && reactions[p.userReaction]) {
-            reactions[p.userReaction] = reactions[p.userReaction].filter(
-              uid => uid !== currentUser.id
-            );
-            if (reactions[p.userReaction].length === 0) delete reactions[p.userReaction];
+            const prevVal = reactions[p.userReaction];
+            if (Array.isArray(prevVal)) {
+              const updated = prevVal.filter(uid => uid !== currentUser.id);
+              if (updated.length === 0) delete reactions[p.userReaction];
+              else reactions[p.userReaction] = updated;
+            } else {
+              delete reactions[p.userReaction];
+            }
           }
 
           // Add new reaction if toggling on
           if (userReaction) {
-            reactions[reactionEmoji] = [...(reactions[reactionEmoji] || []), currentUser.id];
+            const currentVal = reactions[reactionEmoji];
+            const currentArray = Array.isArray(currentVal) ? currentVal : [];
+            reactions[reactionEmoji] = [...currentArray, currentUser.id];
           }
+
+          savePostInteraction(postId, {
+            reactions,
+            userReaction
+          });
 
           return {
             ...p,
@@ -5252,14 +5546,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Community Personas & Channels
   const setCommunityPersona = (communityId: string, persona: Partial<CommunityPersona>) => {
     setCommunityPersonas(prev => {
-      const existing = prev[communityId] || {
+      const existing: CommunityPersona = prev[communityId] || {
         communityId,
         displayName: currentUser.name,
+        avatarUrl: currentUser.avatar,
         avatar: currentUser.avatar,
         bio: currentUser.bio.split('\n')[0],
         badge: 'Contributor'
       };
-      const next = { ...prev, [communityId]: { ...existing, ...persona } };
+      const next: Record<string, CommunityPersona> = { ...prev, [communityId]: { ...existing, ...persona } };
       try {
         localStorage.setItem('lumina_community_personas', JSON.stringify(next));
       } catch {}
@@ -5285,12 +5580,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: currentUser.id,
         username: currentUser.username,
         name: persona?.displayName || currentUser.name,
-        avatar: persona?.avatar || currentUser.avatar,
+        avatar: persona?.avatar || persona?.avatarUrl || currentUser.avatar,
         isVerified: currentUser.isVerified
       },
       userId: currentUser.id,
       authorName: persona?.displayName || currentUser.name,
-      authorAvatar: persona?.avatar || currentUser.avatar,
+      authorAvatar: persona?.avatar || persona?.avatarUrl || currentUser.avatar,
       text,
       mediaUrl,
       replyTo,
@@ -5417,6 +5712,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createPost,
         createStory,
         voteStoryPoll,
+        createReel,
+        deleteReel,
         toggleLikeReel,
         toggleSaveReel,
         addReelComment,
@@ -5524,6 +5821,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsBehindTheScenesOpen,
         chatPasscode,
         setChatPasscode,
+        securitySettings: {
+          isPasscodeEnabled: !!chatPasscode,
+          passcode: chatPasscode || undefined
+        },
+        updateSecuritySettings: (settings: { isPasscodeEnabled?: boolean; passcode?: string }) => {
+          if (settings.isPasscodeEnabled === false) {
+            setChatPasscode(null);
+          } else if (settings.passcode) {
+            setChatPasscode(settings.passcode);
+          }
+        },
         isChatLocked,
         setIsChatLocked,
         unlockChat,
@@ -5588,9 +5896,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         authModalMode,
         setAuthModalMode,
         openAuthModal,
-        continueAsGuest,
         createAccount,
         switchAccount,
+        deactivateAccount,
+        isAccountDeactivated,
         // 3-Bar Profile Settings & Navigation
         isProfileMenuOpen,
         setIsProfileMenuOpen,
@@ -5657,7 +5966,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         preferredLanguage,
         setPreferredLanguage,
         currentLanguageOption,
-        t
+        t,
+        // Username onboarding prompt
+        isUsernameSetupRequired,
+        setIsUsernameSetupRequired
       }}
     >
       {children}

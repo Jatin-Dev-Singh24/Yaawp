@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, HelpCircle, Sparkles, MessageCircle, ShieldCheck, UserCheck, Layers } from 'lucide-react';
+import { ChevronDown, HelpCircle, ArrowRight, MessageCircle, ShieldCheck, UserCheck, Layers } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 
@@ -183,7 +183,7 @@ export const FAQSection: React.FC = () => {
           className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-semibold tracking-wider uppercase transition-all shadow-sm"
         >
           <span>Get Started on Yaawp</span>
-          <Sparkles className="w-3.5 h-3.5" />
+          <ArrowRight className="w-3.5 h-3.5" />
         </Link>
       </div>
     </section>

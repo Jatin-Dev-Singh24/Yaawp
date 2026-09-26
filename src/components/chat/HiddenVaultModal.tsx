@@ -493,7 +493,7 @@ export const HiddenVaultModal: React.FC<HiddenVaultModalProps> = ({
                       className="group relative aspect-square rounded-xl overflow-hidden cursor-pointer bg-slate-100 dark:bg-slate-800"
                     >
                       <img
-                        src={post.mediaUrl}
+                        src={post.mediaUrls?.[0] || post.mediaUrl || post.image}
                         alt={post.caption || 'Post image'}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />

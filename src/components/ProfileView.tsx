@@ -123,8 +123,21 @@ export const ProfileView: React.FC = () => {
   // Filter posts
   const userPosts = posts.filter(p => p.user.id === activeProfile.id);
   const userReels = reels.filter(r => r.user.id === activeProfile.id);
-  const repostPosts = posts.filter(p => p.allowsRepost && (p.user.id === activeProfile.id || p.isSaved));
-  const taggedPosts = posts.slice(0, 3); // Example tagged posts
+  // Reposted posts: ONLY posts where activeProfile explicitly clicked Repost (or repost entries created by them)
+  const repostPosts = posts.filter(
+    p =>
+      p.repostedBy?.id === activeProfile.id ||
+      (p.id.startsWith('repost_') && p.user.id === activeProfile.id)
+  );
+  // Tagged posts: ONLY posts by OTHER creators where activeProfile is genuinely tagged
+  const taggedPosts = posts.filter(
+    p =>
+      p.user.id !== activeProfile.id &&
+      (p.taggedUserIds?.includes(activeProfile.id) ||
+        (Boolean(activeProfile.username && activeProfile.username.length > 1) &&
+          p.caption &&
+          p.caption.toLowerCase().includes(`@${activeProfile.username.toLowerCase()}`)))
+  );
 
   const handleShareProfile = () => {
     navigator.clipboard?.writeText(window.location.href);
@@ -158,7 +171,6 @@ export const ProfileView: React.FC = () => {
   // If viewing a user who has hidden their profile from the current logged in user
   const isProfileHiddenFromCurrentViewer =
     !isOwnProfile &&
-    (activeProfile.id === 'user_current' || activeProfile.id === 'user_1') &&
     hiddenProfileFromUserIds.includes(currentUser.id);
 
   if (isProfileHiddenFromCurrentViewer) {
@@ -498,7 +510,9 @@ export const ProfileView: React.FC = () => {
               </span>{' '}
               <span className="text-slate-500 dark:text-slate-400">followers</span>
               {isFollowersPrivate && (
-                <Lock className="w-3 h-3 inline-block ml-1 text-lime-400" title="Private followers list" />
+                <span title="Private followers list" className="inline-flex items-center">
+                  <Lock className="w-3 h-3 inline-block ml-1 text-lime-400" />
+                </span>
               )}
             </button>
 
@@ -799,7 +813,7 @@ export const ProfileView: React.FC = () => {
               <div
                 key={post.id}
                 id={`profile-post-${post.id}`}
-                className="group relative aspect-square bg-slate-900 overflow-hidden rounded-xl cursor-pointer ambient-glow border border-transparent hover:border-lime-400/40 transition-all"
+                className="group relative aspect-square bg-slate-900 overflow-hidden rounded-xl cursor-pointer ambient-glow border border-transparent hover:border-indigo-500/40 transition-all"
               >
                 <img
                   src={post.mediaUrls[0]}
@@ -920,7 +934,7 @@ export const ProfileView: React.FC = () => {
               onClick={() => {
                 setNavActiveTab('reels');
               }}
-              className="relative aspect-[9/16] bg-zinc-900 rounded-2xl overflow-hidden cursor-pointer group ambient-glow border border-transparent hover:border-lime-400/40 transition-all"
+              className="relative aspect-[9/16] bg-zinc-900 rounded-2xl overflow-hidden cursor-pointer group ambient-glow border border-transparent hover:border-indigo-500/40 transition-all"
             >
               <img src={reel.thumbnailUrl} alt={reel.caption} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent p-3 flex flex-col justify-end text-white">
@@ -959,10 +973,10 @@ export const ProfileView: React.FC = () => {
               <div
                 key={post.id}
                 onClick={() => setSelectedPostForModal(post)}
-                className="group relative aspect-square bg-slate-900 overflow-hidden cursor-pointer rounded-xl ambient-glow border border-transparent hover:border-lime-400/40 transition-all"
+                className="group relative aspect-square bg-slate-900 overflow-hidden cursor-pointer rounded-xl ambient-glow border border-transparent hover:border-indigo-500/40 transition-all"
               >
                 <img src={post.mediaUrls[0]} alt={post.caption} className="w-full h-full object-cover" />
-                <div className="absolute top-2 left-2 p-1 rounded-full bg-black/60 text-lime-400">
+                <div className="absolute top-2 left-2 p-1 rounded-full bg-black/60 text-indigo-400">
                   <Repeat className="w-3.5 h-3.5" />
                 </div>
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white font-semibold text-xs">
@@ -983,20 +997,28 @@ export const ProfileView: React.FC = () => {
 
       {/* Tagged Tab Content */}
       {activeTab === 'tagged' && (
-        <div className="grid grid-cols-3 gap-1 md:gap-3">
-          {taggedPosts.map(post => (
-            <div
-              key={post.id}
-              onClick={() => setSelectedPostForModal(post)}
-              className="group relative aspect-square bg-slate-900 overflow-hidden cursor-pointer rounded-xl ambient-glow border border-transparent hover:border-lime-400/40 transition-all"
-            >
-              <img src={post.mediaUrls[0]} alt={post.caption} className="w-full h-full object-cover" />
-              <div className="absolute bottom-2 left-2 p-1 rounded-full bg-black/60 text-white">
-                <UserCheck className="w-3.5 h-3.5" />
+        taggedPosts.length > 0 ? (
+          <div className="grid grid-cols-3 gap-1 md:gap-3">
+            {taggedPosts.map(post => (
+              <div
+                key={post.id}
+                onClick={() => setSelectedPostForModal(post)}
+                className="group relative aspect-square bg-slate-900 overflow-hidden cursor-pointer rounded-xl ambient-glow border border-transparent hover:border-indigo-500/40 transition-all"
+              >
+                <img src={post.mediaUrls[0]} alt={post.caption} className="w-full h-full object-cover" />
+                <div className="absolute bottom-2 left-2 p-1 rounded-full bg-black/60 text-white">
+                  <UserCheck className="w-3.5 h-3.5" />
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-16 text-center space-y-3">
+            <UserCheck className="w-12 h-12 mx-auto text-zinc-500" />
+            <h3 className="text-sm font-bold text-white">No Tagged Posts Yet</h3>
+            <p className="text-xs text-zinc-500">Posts and photos where you are tagged will appear here.</p>
+          </div>
+        )
       )}
 
       {/* Edit Post Modal */}

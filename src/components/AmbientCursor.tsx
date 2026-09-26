@@ -49,7 +49,7 @@ export const AmbientCursor: React.FC = () => {
       aria-hidden="true"
       className="pointer-events-none fixed inset-0 z-0 overflow-hidden select-none transition-opacity duration-700"
     >
-      {/* Primary soft atmospheric lime glow */}
+      {/* Primary soft atmospheric indigo-violet glow */}
       <motion.div
         style={{
           x: cursorX,
@@ -57,10 +57,10 @@ export const AmbientCursor: React.FC = () => {
           translateX: '-50%',
           translateY: '-50%'
         }}
-        className="absolute w-[500px] h-[500px] rounded-full bg-gradient-to-tr from-lime-500/15 via-emerald-500/10 to-teal-500/5 blur-3xl"
+        className="absolute w-[500px] h-[500px] rounded-full bg-gradient-to-tr from-indigo-500/12 via-purple-500/8 to-cyan-500/5 blur-3xl pointer-events-none"
       />
 
-      {/* Secondary trailing subtle electric lime ambient orb */}
+      {/* Secondary trailing subtle celestial ambient orb */}
       <motion.div
         style={{
           x: cursorX,
@@ -69,7 +69,7 @@ export const AmbientCursor: React.FC = () => {
           translateY: '-40%'
         }}
         transition={{ delay: 0.05 }}
-        className="absolute w-[240px] h-[240px] rounded-full bg-lime-400/10 blur-2xl"
+        className="absolute w-[260px] h-[260px] rounded-full bg-indigo-400/8 blur-2xl pointer-events-none"
       />
     </div>
   );

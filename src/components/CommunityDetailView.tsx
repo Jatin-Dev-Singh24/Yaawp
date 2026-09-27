@@ -846,7 +846,7 @@ export const CommunityDetailView: React.FC<CommunityDetailViewProps> = ({ commun
                     type="url"
                     value={newTopicMedia}
                     onChange={e => setNewTopicMedia(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
+                    placeholder="Paste image link or upload below..."
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none"
                   />
                   <div className="flex items-center gap-2">

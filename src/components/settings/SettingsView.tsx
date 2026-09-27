@@ -121,7 +121,7 @@ export const SettingsView: React.FC = () => {
     return {
       id: 'pfp_custom_1',
       label: 'Profile Picture 1',
-      url: currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&h=300&fit=crop',
+      url: currentUser.avatar || '',
       hasNoPfp: false,
       audience: 'everyone',
       customUserIds: [],
@@ -134,7 +134,7 @@ export const SettingsView: React.FC = () => {
     return {
       id: 'pfp_custom_2',
       label: 'Profile Picture 2',
-      url: currentUser.secondaryAvatar || 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&h=300&fit=crop',
+      url: currentUser.secondaryAvatar || '',
       hasNoPfp: false,
       audience: 'close_friends',
       customUserIds: [],

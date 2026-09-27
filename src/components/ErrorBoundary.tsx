@@ -95,7 +95,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 className="w-full sm:w-auto px-4 py-2 rounded-xl border border-slate-200 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 text-xs font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
                 <Home className="w-3.5 h-3.5" />
-                <span>Go to Feed</span>
+                <span>Return Home</span>
               </button>
             </div>
           </div>

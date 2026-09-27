@@ -7,7 +7,7 @@ import { LegalDocType } from '../../types';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
 
 export const AppPreviewPage: React.FC = () => {
-  const { isAuthenticated, setActiveLegalDoc } = useApp();
+  const { setActiveLegalDoc } = useApp();
   const navigate = useNavigate();
 
   const navigateToLegalDoc = (doc: LegalDocType) => {
@@ -50,34 +50,22 @@ export const AppPreviewPage: React.FC = () => {
           className="flex items-center gap-6 sm:gap-8 ml-auto"
           aria-label="Authentication"
         >
-          {isAuthenticated ? (
-            <div className="flex items-center gap-4">
-              <Link
-                to="/app/home"
-                id="landing-enter-feed-btn"
-                className="text-[12px] tracking-[0.2em] uppercase font-medium text-emerald-400 hover:text-emerald-300 transition-colors duration-300 cursor-pointer"
-              >
-                Go to Feed →
-              </Link>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <Link
-                to="/auth/login"
-                id="landing-login-btn"
-                className="px-4 py-2 text-xs sm:text-[13px] tracking-[0.16em] uppercase font-light text-zinc-300 hover:text-white transition-colors cursor-pointer"
-              >
-                Log In
-              </Link>
-              <Link
-                to="/auth/signup"
-                id="landing-signup-btn"
-                className="px-5 py-2 rounded-full border border-zinc-700 bg-zinc-900/90 hover:bg-zinc-800 text-xs sm:text-[13px] tracking-[0.18em] uppercase font-medium text-zinc-100 hover:text-white transition-all duration-300 cursor-pointer shadow-xs"
-              >
-                Sign Up
-              </Link>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            <Link
+              to="/auth/login"
+              id="landing-login-btn"
+              className="px-4 py-2 text-xs sm:text-[13px] tracking-[0.16em] uppercase font-light text-zinc-300 hover:text-white transition-colors cursor-pointer"
+            >
+              Log In
+            </Link>
+            <Link
+              to="/auth/signup"
+              id="landing-signup-btn"
+              className="px-5 py-2 rounded-full border border-zinc-700 bg-zinc-900/90 hover:bg-zinc-800 text-xs sm:text-[13px] tracking-[0.18em] uppercase font-medium text-zinc-100 hover:text-white transition-all duration-300 cursor-pointer shadow-xs"
+            >
+              Sign Up
+            </Link>
+          </div>
         </nav>
       </header>
 
@@ -103,32 +91,20 @@ export const AppPreviewPage: React.FC = () => {
 
         {/* Prominent Login / Signup Action Button */}
         <div className="mt-8 flex flex-col sm:flex-row items-center gap-3.5">
-          {isAuthenticated ? (
-            <Link
-              to="/app/home"
-              id="landing-enter-feed-main-btn"
-              className="px-8 py-3 rounded-full bg-zinc-100 hover:bg-white text-zinc-950 text-xs sm:text-sm font-medium tracking-[0.16em] uppercase shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer"
-            >
-              Enter App →
-            </Link>
-          ) : (
-            <>
-              <Link
-                to="/auth/signup"
-                id="landing-center-signup-btn"
-                className="px-8 py-3 rounded-full bg-zinc-100 hover:bg-white text-zinc-950 text-xs sm:text-sm font-medium tracking-[0.16em] uppercase shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer"
-              >
-                Sign Up to Enter
-              </Link>
-              <Link
-                to="/auth/login"
-                id="landing-center-login-btn"
-                className="px-6 py-3 rounded-full border border-zinc-800 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs sm:text-sm font-normal tracking-[0.16em] uppercase transition-all duration-200 cursor-pointer"
-              >
-                Log In
-              </Link>
-            </>
-          )}
+          <Link
+            to="/auth/signup"
+            id="landing-center-signup-btn"
+            className="px-8 py-3 rounded-full bg-zinc-100 hover:bg-white text-zinc-950 text-xs sm:text-sm font-medium tracking-[0.16em] uppercase shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer"
+          >
+            Sign Up to Enter
+          </Link>
+          <Link
+            to="/auth/login"
+            id="landing-center-login-btn"
+            className="px-6 py-3 rounded-full border border-zinc-800 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs sm:text-sm font-normal tracking-[0.16em] uppercase transition-all duration-200 cursor-pointer"
+          >
+            Log In
+          </Link>
         </div>
 
         {/* Scroll indicator to FAQs */}

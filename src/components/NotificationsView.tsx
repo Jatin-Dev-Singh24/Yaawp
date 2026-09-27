@@ -11,7 +11,6 @@ import {
   Compass
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { USERS } from '../data/mockData';
 
 const TWENTY_DAYS_MS = 20 * 24 * 60 * 60 * 1000;
 
@@ -24,7 +23,9 @@ export const NotificationsView: React.FC = () => {
     followedUserIds,
     setSelectedPostForModal,
     openUserProfile,
-    posts
+    posts,
+    currentUser,
+    allUsers
   } = useApp();
 
   const [filter, setFilter] = useState<'all' | 'like' | 'comment' | 'follow'>('all');
@@ -63,11 +64,10 @@ export const NotificationsView: React.FC = () => {
     }
   };
 
-  // Recommended accounts to discover
+  // Recommended accounts to discover based strictly on real registered users
   const recommendedUsers = useMemo(() => {
-    const list = Object.values(USERS);
-    return list.slice(0, 6);
-  }, []);
+    return allUsers.filter(u => u.id !== currentUser.id && !followedUserIds.includes(u.id)).slice(0, 6);
+  }, [allUsers, currentUser.id, followedUserIds]);
 
   return (
     <div
@@ -233,64 +233,66 @@ export const NotificationsView: React.FC = () => {
         </div>
       )}
 
-      {/* Account Recommendations Section (Shown where notifications end or below read more) */}
-      <div className="pt-3 border-t border-neutral-200/80 dark:border-neutral-800/80 space-y-3.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-amber-500" />
-            <h3 className="text-sm font-bold text-neutral-900 dark:text-white">
-              Suggested Accounts for You
-            </h3>
+      {/* Account Recommendations Section (Shown only if other real accounts exist) */}
+      {recommendedUsers.length > 0 && (
+        <div className="pt-3 border-t border-neutral-200/80 dark:border-neutral-800/80 space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <h3 className="text-sm font-bold text-neutral-900 dark:text-white">
+                Suggested Accounts for You
+              </h3>
+            </div>
+            <span className="text-[11px] text-neutral-400 dark:text-neutral-500 flex items-center gap-1">
+              <Compass className="w-3 h-3" />
+              Explore more
+            </span>
           </div>
-          <span className="text-[11px] text-neutral-400 dark:text-neutral-500 flex items-center gap-1">
-            <Compass className="w-3 h-3" />
-            Explore more
-          </span>
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          {recommendedUsers.map(user => {
-            const isFollowing = followedUserIds.includes(user.id) || user.isFollowing;
-            return (
-              <div
-                key={user.id}
-                className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200/70 dark:border-neutral-800/80 shadow-xs hover:border-neutral-300 dark:hover:border-neutral-700 transition-colors"
-              >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {recommendedUsers.map(user => {
+              const isFollowing = followedUserIds.includes(user.id) || user.isFollowing;
+              return (
                 <div
-                  className="flex items-center gap-2.5 min-w-0 cursor-pointer"
-                  onClick={() => openUserProfile(user.id)}
+                  key={user.id}
+                  className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200/70 dark:border-neutral-800/80 shadow-xs hover:border-neutral-300 dark:hover:border-neutral-700 transition-colors"
                 >
-                  <img
-                    src={user.avatar}
-                    alt={user.username}
-                    className="w-10 h-10 rounded-full object-cover shrink-0 ring-1 ring-neutral-200 dark:ring-neutral-700"
-                  />
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
-                      {user.name}
-                    </p>
-                    <p className="text-[11px] text-neutral-400 dark:text-neutral-500 truncate">
-                      @{user.username}
-                    </p>
+                  <div
+                    className="flex items-center gap-2.5 min-w-0 cursor-pointer"
+                    onClick={() => openUserProfile(user.id)}
+                  >
+                    <img
+                      src={user.avatar}
+                      alt={user.username}
+                      className="w-10 h-10 rounded-full object-cover shrink-0 ring-1 ring-neutral-200 dark:ring-neutral-700"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
+                        {user.name}
+                      </p>
+                      <p className="text-[11px] text-neutral-400 dark:text-neutral-500 truncate">
+                        @{user.username}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <button
-                  type="button"
-                  onClick={() => toggleFollowUser(user.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ml-2 ${
-                    isFollowing
-                      ? 'border border-neutral-300 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                      : 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:opacity-90 shadow-xs'
-                  }`}
-                >
-                  {isFollowing ? 'Following' : 'Follow'}
-                </button>
-              </div>
-            );
-          })}
+                  <button
+                    type="button"
+                    onClick={() => toggleFollowUser(user.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ml-2 ${
+                      isFollowing
+                        ? 'border border-neutral-300 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                        : 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:opacity-90 shadow-xs'
+                    }`}
+                  >
+                    {isFollowing ? 'Following' : 'Follow'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

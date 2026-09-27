@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { AudioData } from '../../types';
-import { Music, Upload, X, Play, Pause, Check } from 'lucide-react';
+import { Music, Upload, X, Play, Pause, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface MusicAttachmentModalProps {
@@ -9,27 +9,6 @@ interface MusicAttachmentModalProps {
   onSendMusic: (music: AudioData, caption?: string) => void;
 }
 
-const PRESET_MUSIC: AudioData[] = [
-  {
-    title: 'Sunset Chill (Lo-Fi Beat)',
-    artist: 'YAAWP Ambient Collective',
-    duration: 142,
-    audioUrl: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3',
-  },
-  {
-    title: 'Tokyo Neon Nights',
-    artist: 'Midnight Synth Labs',
-    duration: 188,
-    audioUrl: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=electronic-future-beats-117997.mp3',
-  },
-  {
-    title: 'Acoustic Morning Breeze',
-    artist: 'Luna Horizon',
-    duration: 95,
-    audioUrl: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3?filename=relaxing-guitar-loop-20387.mp3',
-  },
-];
-
 export const MusicAttachmentModal: React.FC<MusicAttachmentModalProps> = ({
   isOpen,
   onClose,
@@ -37,7 +16,7 @@ export const MusicAttachmentModal: React.FC<MusicAttachmentModalProps> = ({
 }) => {
   const [selectedMusic, setSelectedMusic] = useState<AudioData | null>(null);
   const [caption, setCaption] = useState('');
-  const [previewPlaying, setPreviewPlaying] = useState<string | null>(null);
+  const [previewPlaying, setPreviewPlaying] = useState<boolean>(false);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
   if (!isOpen) return null;
@@ -59,22 +38,22 @@ export const MusicAttachmentModal: React.FC<MusicAttachmentModalProps> = ({
     }
   };
 
-  const togglePreview = (url: string) => {
-    if (previewPlaying === url) {
+  const togglePreview = () => {
+    if (!selectedMusic) return;
+    if (previewPlaying) {
       audioPlayerRef.current?.pause();
-      setPreviewPlaying(null);
+      setPreviewPlaying(false);
     } else {
       if (!audioPlayerRef.current) {
         audioPlayerRef.current = new Audio();
       }
-      audioPlayerRef.current.src = url;
+      audioPlayerRef.current.src = selectedMusic.audioUrl;
       audioPlayerRef.current.play().then(() => {
-        setPreviewPlaying(url);
+        setPreviewPlaying(true);
       }).catch(() => {
-        // audio play policy fallback
-        setPreviewPlaying(url);
+        setPreviewPlaying(true);
       });
-      audioPlayerRef.current.onended = () => setPreviewPlaying(null);
+      audioPlayerRef.current.onended = () => setPreviewPlaying(false);
     }
   };
 
@@ -109,7 +88,7 @@ export const MusicAttachmentModal: React.FC<MusicAttachmentModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Share Music from Device
+                Share Audio from Device
               </h3>
               <p className="text-[11px] text-slate-500">
                 MP3, WAV, AAC audio tracks & songs
@@ -131,63 +110,50 @@ export const MusicAttachmentModal: React.FC<MusicAttachmentModalProps> = ({
         {/* Content */}
         <div className="p-4 space-y-4">
           {/* Audio Upload Trigger */}
-          <label className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-amber-500 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer bg-slate-50/50 dark:bg-slate-800/30 hover:bg-amber-50/20 transition-all">
-            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-              <Upload className="w-5 h-5" />
+          {selectedMusic ? (
+            <div className="p-4 rounded-2xl border border-amber-500 bg-amber-50/50 dark:bg-amber-950/30 flex items-center justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <button
+                  type="button"
+                  onClick={togglePreview}
+                  className="w-10 h-10 rounded-full bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-xs transition-transform active:scale-95 cursor-pointer"
+                >
+                  {previewPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                </button>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                    {selectedMusic.title}
+                  </span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                    {selectedMusic.artist} • {formatDuration(selectedMusic.duration)}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  audioPlayerRef.current?.pause();
+                  setSelectedMusic(null);
+                  setPreviewPlaying(false);
+                }}
+                className="text-rose-500 hover:text-rose-600 p-1.5 rounded-lg"
+                title="Remove audio"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-              {selectedMusic ? selectedMusic.title : 'Upload audio file from device'}
-            </span>
-            <span className="text-[10px] text-slate-400">MP3, WAV, M4A, OGG</span>
-            <input type="file" accept="audio/*" className="hidden" onChange={handleFileUpload} />
-          </label>
-
-          {/* Quick Library Presets */}
-          <div>
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-              Or pick featured track:
-            </span>
-            <div className="space-y-1.5">
-              {PRESET_MUSIC.map((track, idx) => {
-                const isSelected = selectedMusic?.title === track.title;
-                const isPlaying = previewPlaying === track.audioUrl;
-
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => setSelectedMusic(track)}
-                    className={`w-full p-2.5 rounded-xl border flex items-center justify-between text-left transition-all cursor-pointer ${
-                      isSelected
-                        ? 'border-amber-500 bg-amber-50/60 dark:bg-amber-950/40 shadow-xs'
-                        : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          togglePreview(track.audioUrl);
-                        }}
-                        className="w-8 h-8 rounded-full bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-xs transition-transform active:scale-95"
-                      >
-                        {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
-                      </button>
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
-                          {track.title}
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          {track.artist} • {formatDuration(track.duration)}
-                        </span>
-                      </div>
-                    </div>
-                    {isSelected && <Check className="w-4 h-4 text-amber-500 shrink-0 ml-2" />}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          ) : (
+            <label className="w-full py-8 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-amber-500 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer bg-slate-50/50 dark:bg-slate-800/30 hover:bg-amber-50/20 transition-all">
+              <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <Upload className="w-5 h-5" />
+              </div>
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Choose audio file from device
+              </span>
+              <span className="text-[10px] text-slate-400">MP3, WAV, M4A, OGG</span>
+              <input type="file" accept="audio/*" className="hidden" onChange={handleFileUpload} />
+            </label>
+          )}
 
           {/* Optional Caption */}
           {selectedMusic && (
@@ -214,7 +180,7 @@ export const MusicAttachmentModal: React.FC<MusicAttachmentModalProps> = ({
               audioPlayerRef.current?.pause();
               onClose();
             }}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800"
+            className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 cursor-pointer"
           >
             Cancel
           </button>
@@ -222,7 +188,7 @@ export const MusicAttachmentModal: React.FC<MusicAttachmentModalProps> = ({
             type="button"
             onClick={handleSend}
             disabled={!selectedMusic}
-            className="px-4 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-xs transition-colors"
+            className="px-4 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-xs transition-colors cursor-pointer"
           >
             Send Track
           </button>

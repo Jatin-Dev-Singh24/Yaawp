@@ -552,7 +552,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const fallbackHandle = email ? sanitizeUsername(email.split('@')[0]) : 'creator';
       const userHandle = sanitizeUsername(meta.username || '') || fallbackHandle;
       const userName = meta.full_name || meta.name || userHandle;
-      const userAvatar = meta.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&h=400&q=80';
+      const userAvatar = meta.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(userHandle)}`;
 
       // 1. Try to fetch persistent profile from Supabase profiles table
       let dbProfile: any = null;
@@ -832,7 +832,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeTab, setActiveTab] = useState<TabType>('feed');
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     const saved = getStoredStateItem('user');
-    return saved ? JSON.parse(saved) : CURRENT_USER;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          const DUMMY_USER_IDS = new Set(['user_elena', 'user_liam', 'user_maya', 'user_sophia', 'user_kai', 'user_david', 'user_marco']);
+          if (!DUMMY_USER_IDS.has(parsed.id) && !['elena_visuals', 'liam_lens', 'maya_sky'].includes(parsed.username?.toLowerCase())) {
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+    return CURRENT_USER;
   });
 
   const [preferredLanguage, setPreferredLanguageState] = useState<string>(() => {
@@ -891,14 +902,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Profiles cache for all platform users
   const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>(() => {
     const saved = getStoredStateItem('profiles');
-    return saved ? JSON.parse(saved) : USER_PROFILES;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          const clean: Record<string, UserProfile> = {};
+          const DUMMY_IDS = new Set(['user_elena', 'user_liam', 'user_maya', 'user_sophia', 'user_kai', 'user_david', 'user_marco']);
+          Object.entries(parsed).forEach(([k, v]: [string, any]) => {
+            if (v && !DUMMY_IDS.has(k) && !['elena_visuals', 'liam_lens', 'maya_sky'].includes(v.username?.toLowerCase())) {
+              clean[k] = v;
+            }
+          });
+          if (Object.keys(clean).length > 0) return clean;
+        }
+      } catch {}
+    }
+    return USER_PROFILES;
   });
 
   // Followed users list
   const [followedUserIds, setFollowedUserIds] = useState<string[]>(() => {
     const saved = getStoredStateItem('followed');
-    if (saved) return JSON.parse(saved);
-    return Object.values(USERS).filter(u => u.isFollowing).map(u => u.id);
+    const DUMMY_IDS = new Set(['user_elena', 'user_liam', 'user_maya', 'user_sophia', 'user_kai', 'user_david', 'user_marco']);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((id: string) => !DUMMY_IDS.has(id));
+        }
+      } catch {}
+    }
+    return [];
   });
 
   // Feed algorithm settings
@@ -915,20 +949,129 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Currently viewed user profile (defaults to currentUser)
   const [viewedUserId, setViewedUserId] = useState<string>(currentUser.id);
 
-  // Automatic one-time cleanup to ensure all legacy dummy posts and cached demo data are purged for real pilot users
+  // Automatic one-time cleanup to ensure all legacy dummy posts, notifications, and cached demo data are purged
   if (typeof window !== 'undefined') {
-    const PURGE_KEY = 'yaawp_pilot_clean_storage_v2';
+    const PURGE_KEY = 'yaawp_purge_all_dummy_data_v6';
     if (!localStorage.getItem(PURGE_KEY)) {
       try {
-        localStorage.removeItem('yaawp_authenticated');
         localStorage.removeItem(FEED_OFFLINE_CACHE_KEY);
         localStorage.removeItem('lumina_feed_offline_cache_v2');
-        localStorage.removeItem(`${LOCAL_STORAGE_KEY}_posts`);
-        localStorage.removeItem(`${LOCAL_STORAGE_KEY}_stories`);
-        localStorage.removeItem(`${LOCAL_STORAGE_KEY}_reels`);
+        localStorage.removeItem(`${LOCAL_STORAGE_KEY}_notifications`);
+        localStorage.removeItem('yaawp_chat_lists');
         localStorage.removeItem('instagram_app_state_v1_posts');
         localStorage.removeItem('instagram_app_state_v1_stories');
         localStorage.removeItem('instagram_app_state_v1_reels');
+        localStorage.removeItem('lumina_custom_circles');
+        localStorage.removeItem('lumina_nearby_activities');
+        localStorage.removeItem('yaawp_custom_circles');
+        localStorage.removeItem('yaawp_nearby_activities');
+
+        const DUMMY_USER_IDS = new Set(['user_elena', 'user_liam', 'user_maya', 'user_sophia', 'user_kai', 'user_david', 'user_marco']);
+        const DUMMY_CONV_IDS = new Set([
+          'conv_sophia', 'conv_elena', 'conv_kai', 'conv_david', 'conv_marco',
+          'conv_group_creatives', 'conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5',
+          'conv_elena_visuals', 'conv_liam_lens', 'conv_maya_sky'
+        ]);
+
+        // Clean dummy items from cached posts
+        const cachedPostsRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY}_posts`);
+        if (cachedPostsRaw) {
+          try {
+            const parsedPosts = JSON.parse(cachedPostsRaw);
+            if (Array.isArray(parsedPosts)) {
+              const cleanPosts = parsedPosts.filter((p: any) =>
+                p &&
+                !p.id?.startsWith('post_curr_') &&
+                !p.id?.startsWith('exp_post_') &&
+                !['post_1', 'post_2', 'post_3', 'post_4', 'post_5', 'post_6', 'post_7'].includes(p.id) &&
+                !DUMMY_USER_IDS.has(p.user?.id)
+              );
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_posts`, JSON.stringify(cleanPosts));
+            }
+          } catch {}
+        }
+
+        // Clean dummy communities
+        const cachedCommRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY}_communities`);
+        if (cachedCommRaw) {
+          try {
+            const parsedComm = JSON.parse(cachedCommRaw);
+            if (Array.isArray(parsedComm)) {
+              const DUMMY_COMM_IDS = new Set(['comm_1', 'comm_2', 'comm_3', 'comm_4', 'comm_visual_arts', 'comm_street_photo']);
+              const cleanComm = parsedComm.filter((c: any) =>
+                c && !DUMMY_COMM_IDS.has(c.id) && !['Tokyo Street Photography', 'Visual Storytellers', 'Minimalist Architecture'].includes(c.name)
+              );
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_communities`, JSON.stringify(cleanComm));
+            }
+          } catch {}
+        }
+
+        // Clean dummy discussions
+        const cachedDiscRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY}_discussions`);
+        if (cachedDiscRaw) {
+          try {
+            const parsedDisc = JSON.parse(cachedDiscRaw);
+            if (Array.isArray(parsedDisc)) {
+              const cleanDisc = parsedDisc.filter((d: any) => d && !['disc_1', 'disc_2', 'disc_3'].includes(d.id));
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_discussions`, JSON.stringify(cleanDisc));
+            }
+          } catch {}
+        }
+
+        // Clean dummy challenges
+        const cachedChalRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY}_challenges`);
+        if (cachedChalRaw) {
+          try {
+            const parsedChal = JSON.parse(cachedChalRaw);
+            if (Array.isArray(parsedChal)) {
+              const cleanChal = parsedChal.filter((ch: any) => ch && !['chal_1', 'chal_2', 'chal_3'].includes(ch.id));
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_challenges`, JSON.stringify(cleanChal));
+            }
+          } catch {}
+        }
+
+        // Clean dummy stories
+        const cachedStoriesRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY}_stories`);
+        if (cachedStoriesRaw) {
+          try {
+            const parsedStories = JSON.parse(cachedStoriesRaw);
+            if (Array.isArray(parsedStories)) {
+              const cleanStories = parsedStories.filter((s: any) =>
+                s && !['story_current', 'story_elena', 'story_marco', 'story_kai', 'story_sophia', 'story_david'].includes(s.id)
+              );
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_stories`, JSON.stringify(cleanStories));
+            }
+          } catch {}
+        }
+
+        // Clean dummy reels
+        const cachedReelsRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY}_reels`);
+        if (cachedReelsRaw) {
+          try {
+            const parsedReels = JSON.parse(cachedReelsRaw);
+            if (Array.isArray(parsedReels)) {
+              const cleanReels = parsedReels.filter((r: any) =>
+                r && !['reel_1', 'reel_2', 'reel_3', 'reel_4', 'reel_5'].includes(r.id)
+              );
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_reels`, JSON.stringify(cleanReels));
+            }
+          } catch {}
+        }
+
+        // Clean dummy conversations
+        const cachedConvRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY}_conversations`);
+        if (cachedConvRaw) {
+          try {
+            const parsedConv = JSON.parse(cachedConvRaw);
+            if (Array.isArray(parsedConv)) {
+              const cleanConv = parsedConv.filter((c: any) =>
+                c && !DUMMY_CONV_IDS.has(c.id) && !DUMMY_USER_IDS.has(c.participant?.id)
+              );
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_conversations`, JSON.stringify(cleanConv));
+            }
+          } catch {}
+        }
+
         localStorage.setItem(PURGE_KEY, 'true');
       } catch {}
     }
@@ -1030,9 +1173,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const saved = getStoredStateItem('notifications');
-    let raw: NotificationItem[] = saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
-    if (!raw || raw.length === 0) {
-      raw = INITIAL_NOTIFICATIONS;
+    let raw: NotificationItem[] = [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const DUMMY_USER_IDS = new Set(['user_elena', 'user_liam', 'user_maya', 'user_sophia', 'user_kai', 'user_david', 'user_marco']);
+          raw = parsed.filter((n: any) =>
+            n &&
+            !n.id?.startsWith('notif_init_') &&
+            !DUMMY_USER_IDS.has(n.user?.id) &&
+            !['elena_visuals', 'liam_lens', 'maya_sky'].includes(n.user?.username?.toLowerCase())
+          );
+        }
+      } catch {}
     }
     // Auto-delete notifications older than 20 days
     return raw
@@ -1073,13 +1227,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const isBotDeleted = localStorage.getItem('yaawp_support_bot_deleted') === 'true';
 
-    const DUMMY_CONV_IDS = new Set(['conv_sophia', 'conv_elena', 'conv_kai', 'conv_david', 'conv_marco', 'conv_group_creatives', 'conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']);
+    const DUMMY_CONV_IDS = new Set([
+      'conv_sophia', 'conv_elena', 'conv_kai', 'conv_david', 'conv_marco',
+      'conv_group_creatives', 'conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5',
+      'conv_elena_visuals', 'conv_liam_lens', 'conv_maya_sky'
+    ]);
+    const DUMMY_PARTICIPANT_IDS = new Set([
+      'user_elena', 'user_liam', 'user_maya', 'user_sophia', 'user_kai', 'user_david', 'user_marco'
+    ]);
 
     const saved = getStoredStateItem('conversations');
     if (saved) {
       try {
         const parsed: ChatConversation[] = JSON.parse(saved);
-        const filtered = parsed.filter(c => c && !DUMMY_CONV_IDS.has(c.id));
+        const filtered = parsed.filter(c =>
+          c &&
+          !DUMMY_CONV_IDS.has(c.id) &&
+          !DUMMY_PARTICIPANT_IDS.has(c.participant?.id)
+        );
         const enriched: ChatConversation[] = filtered.map(c => ({
           ...c,
           isPinned: c.id === 'conv_support_bot' ? false : Boolean(c.isPinned),
@@ -1123,17 +1288,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isEditProfileOpen, setIsEditProfileOpen] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Custom Chat Lists state (e.g. School, Family, Work, etc.)
+  // Custom Chat Lists state (clean empty by default)
   const [chatLists, setChatLists] = useState<ChatCustomList[]>(() => {
     try {
       const saved = localStorage.getItem('yaawp_chat_lists');
       if (saved) return JSON.parse(saved);
     } catch {}
-    return [
-      { id: 'list_school', name: 'School', color: 'indigo', createdAt: Date.now() - 300000 },
-      { id: 'list_family', name: 'Family', color: 'emerald', createdAt: Date.now() - 200000 },
-      { id: 'list_friends', name: 'Friends', color: 'amber', createdAt: Date.now() - 100000 }
-    ];
+    return [];
   });
 
   useEffect(() => {
@@ -1176,19 +1337,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Communities, Discussions, Challenges State
   const [communities, setCommunities] = useState<Community[]>(() => {
     const saved = getStoredStateItem('communities');
-    return saved ? JSON.parse(saved) : INITIAL_COMMUNITIES;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const DUMMY_COMM_IDS = new Set(['comm_1', 'comm_2', 'comm_3', 'comm_4', 'comm_visual_arts', 'comm_street_photo']);
+          return parsed.filter((c: any) =>
+            c && !DUMMY_COMM_IDS.has(c.id) && !['Tokyo Street Photography', 'Visual Storytellers', 'Minimalist Architecture'].includes(c.name)
+          );
+        }
+      } catch {}
+    }
+    return INITIAL_COMMUNITIES;
   });
   const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(null);
   const [isCreateCommunityOpen, setIsCreateCommunityOpen] = useState<boolean>(false);
 
   const [discussions, setDiscussions] = useState<Discussion[]>(() => {
     const saved = getStoredStateItem('discussions');
-    return saved ? JSON.parse(saved) : INITIAL_DISCUSSIONS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((d: any) => d && !['disc_1', 'disc_2', 'disc_3'].includes(d.id));
+        }
+      } catch {}
+    }
+    return INITIAL_DISCUSSIONS;
   });
 
   const [challenges, setChallenges] = useState<Challenge[]>(() => {
     const saved = getStoredStateItem('challenges');
-    return saved ? JSON.parse(saved) : INITIAL_CHALLENGES;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((ch: any) => ch && !['chal_1', 'chal_2', 'chal_3'].includes(ch.id));
+        }
+      } catch {}
+    }
+    return INITIAL_CHALLENGES;
   });
   const [isCreateChallengeOpen, setIsCreateChallengeOpen] = useState<boolean>(false);
 
@@ -1412,7 +1600,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('lumina_custom_circles');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((c: any) => c && !['circle_1', 'circle_2', 'circle_3'].includes(c.id));
+        }
       } catch {}
     }
     return INITIAL_CIRCLES;
@@ -1424,7 +1615,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('lumina_nearby_activities');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((a: any) => a && !['act_1', 'act_2', 'act_3'].includes(a.id));
+        }
       } catch {}
     }
     return INITIAL_NEARBY_ACTIVITIES;
@@ -1843,12 +2037,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: userId,
       username: fallbackUser?.username || 'user',
       name: fallbackUser?.name || 'User',
-      avatar: fallbackUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&h=400&q=80',
+      avatar: fallbackUser?.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(userId)}`,
       isVerified: fallbackUser?.isVerified || false,
       isFollowing: followedUserIds.includes(userId),
-      bio: fallbackUser?.bioSnippet || 'Lumina creator sharing visual moments ✨',
-      followersCount: 1200,
-      followingCount: 340,
+      bio: fallbackUser?.bioSnippet || '',
+      followersCount: 0,
+      followingCount: 0,
       postsCount: posts.filter(p => p.user.id === userId).length,
       highlights: []
     };
@@ -3197,7 +3391,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             data: {
               username: cleanUsername,
               full_name: data.name.trim(),
-              avatar_url: data.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&h=400&q=80'
+              avatar_url: data.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(cleanUsername)}`
             }
           }
         });
@@ -3221,7 +3415,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       username: cleanUsername,
       name: data.name.trim(),
       email: data.contact.includes('@') ? data.contact.trim() : undefined,
-      avatar: data.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&h=400&q=80',
+      avatar: data.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(cleanUsername)}`,
       bio: 'New Yaawp creator ✨ Sharing moments & connecting with community.',
       isVerified: false,
       preferred_language: data.preferred_language || preferredLanguage || 'en',
@@ -3326,9 +3520,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       bio: (profile as UserProfile).bio || 'Yaawp creator',
       website: (profile as UserProfile).website,
       isVerified: profile.isVerified,
-      followersCount: (profile as UserProfile).followersCount || 100,
-      followingCount: (profile as UserProfile).followingCount || 50,
-      postsCount: (profile as UserProfile).postsCount || 1,
+      followersCount: (profile as UserProfile).followersCount ?? 0,
+      followingCount: (profile as UserProfile).followingCount ?? 0,
+      postsCount: (profile as UserProfile).postsCount ?? 0,
       highlights: (profile as UserProfile).highlights || []
     };
     setCurrentUser(fullProfile);
@@ -3479,8 +3673,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       slug: generatedSlug,
       description: data.description || 'A welcoming space for creators and enthusiasts.',
       about: data.about || 'A dedicated community space on Lumina.',
-      avatar: data.avatar || 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=400&h=400&q=80',
-      bannerUrl: data.bannerUrl || 'https://images.unsplash.com/photo-1452421822248-d4c2b47f0c81?auto=format&fit=crop&w=1200&h=400&q=80',
+      avatar: data.avatar || '',
+      bannerUrl: data.bannerUrl || '',
       isPrivate: Boolean(data.isPrivate),
       inviteCode: `${generatedSlug}-invite`,
       ownerId: currentUser.id,
@@ -3567,11 +3761,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: `group_${Date.now()}`,
         username: name.toLowerCase().replace(/\s+/g, '_'),
         name: name,
-        avatar: avatar || 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=400&h=400&q=80'
+        avatar: avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(name)}`
       },
       isGroup: true,
       groupName: name,
-      groupAvatar: avatar || 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=400&h=400&q=80',
+      groupAvatar: avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(name)}`,
       groupDescription: description || `Welcome to ${name}! A space to connect, share inspiration, and collaborate.`,
       groupMembers: memberUsers,
       isGroupPublic: isPublic,
@@ -5108,7 +5302,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             email: data.user.email,
             username: data.user.user_metadata?.username || (data.user.email ? data.user.email.split('@')[0] : 'user'),
             name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || 'User',
-            avatar: data.user.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+            avatar: data.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(data.user.id)}`,
             bio: 'Yaawp creator ✨',
             isVerified: false,
             followersCount: 0,
@@ -5151,7 +5345,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const googleEmail = 'jatindevsingh644@gmail.com';
     const rawUsername = 'jatindev';
     const googleName = 'Jatin Dev Singh';
-    const googleAvatar = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
+    const googleAvatar = `https://api.dicebear.com/7.x/identicon/svg?seed=${rawUsername}`;
 
     const existing = (Object.values(userProfiles) as UserProfile[]).find(
       p => p.email?.toLowerCase() === googleEmail.toLowerCase()

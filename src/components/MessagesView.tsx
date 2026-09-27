@@ -470,25 +470,6 @@ export const MessagesView: React.FC = () => {
     showToast(`Sent ${gameTitle} game invitation!`);
   };
 
-  // Simulate instant typing indicator & auto response
-  const handleSimulateTyping = () => {
-    if (!activeConversation) return;
-    triggerTypingIndicator(activeConversation.id, true);
-    showToast(`${activeConversation.participant.name} is typing...`);
-
-    setTimeout(() => {
-      triggerTypingIndicator(activeConversation.id, false);
-      const responses = [
-        "Hey! The lighting in that new visual collective is unreal 🔥",
-        "Listening to that voice note now, sounds crisp!",
-        "Just checked out your updated portfolio. Loving the direction!",
-        "Let's catch up on the upcoming film project this week ✨"
-      ];
-      const randomMsg = responses[Math.floor(Math.random() * responses.length)];
-      sendMessage(activeConversation.id, randomMsg);
-    }, 2400);
-  };
-
   const handleStartNewChat = (user: { id: string; username: string; name: string; avatar: string }) => {
     startConversationWithUser(user);
     setShowNewChatModal(false);
@@ -1178,28 +1159,17 @@ export const MessagesView: React.FC = () => {
               </div>
             </div>
 
-            {/* Quick Actions & Demo Triggers */}
+            {/* Quick Actions */}
             <div className="flex items-center gap-1.5">
-              {/* Simulate typing dots button */}
               <button
-                type="button"
-                onClick={handleSimulateTyping}
-                className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 text-[11px] text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all shadow-xs"
-                title="Simulate typing dots from contact"
-              >
-                <Sparkles className="w-3 h-3 text-indigo-500" />
-                <span>Simulate Reply</span>
-              </button>
-
-              <button
-                onClick={() => showToast('Simulating secure audio call...')}
+                onClick={() => showToast('Voice calling is coming soon')}
                 className="p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                 title="Audio Call"
               >
                 <Phone className="w-4 h-4" />
               </button>
               <button
-                onClick={() => showToast('Simulating encrypted video call...')}
+                onClick={() => showToast('Video calling is coming soon')}
                 className="p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                 title="Video Call"
               >
@@ -1616,7 +1586,7 @@ export const MessagesView: React.FC = () => {
                                         id: uid,
                                         username: uid,
                                         name: 'Contact',
-                                        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
+                                        avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(uid)}`
                                       });
                                     }
                                   }}

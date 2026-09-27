@@ -18,8 +18,8 @@ export const CreateCommunityModal: React.FC = () => {
     'Share original photography and creative assets',
     'No spam or unauthorized promotion'
   ]);
-  const [avatar, setAvatar] = useState('https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=400&h=400&q=80');
-  const [bannerUrl, setBannerUrl] = useState('https://images.unsplash.com/photo-1452421822248-d4c2b47f0c81?auto=format&fit=crop&w=1200&h=400&q=80');
+  const [avatar, setAvatar] = useState('');
+  const [bannerUrl, setBannerUrl] = useState('');
 
   if (!isCreateCommunityOpen) return null;
 

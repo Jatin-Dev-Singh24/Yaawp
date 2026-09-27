@@ -8,14 +8,6 @@ import {
   sanitizeUsername
 } from '../utils/usernameValidation';
 
-const PRESET_AVATARS = [
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=300&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=300&auto=format&fit=crop&q=80'
-];
-
 export const EditProfileModal: React.FC = () => {
   const {
     isEditProfileOpen,
@@ -243,27 +235,6 @@ export const EditProfileModal: React.FC = () => {
                   onChange={handleImageChange}
                   className="hidden"
                 />
-              </div>
-            </div>
-
-            {/* Quick avatar presets */}
-            <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
-              <span className="text-[10px] font-semibold text-slate-400 block mb-1.5">
-                Or pick a preset:
-              </span>
-              <div className="flex items-center gap-2">
-                {PRESET_AVATARS.map((presetUrl, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setAvatar(presetUrl)}
-                    className={`w-8 h-8 rounded-full overflow-hidden border-2 transition-transform hover:scale-110 ${
-                      avatar === presetUrl ? 'border-indigo-600 ring-2 ring-indigo-400/40' : 'border-transparent'
-                    }`}
-                  >
-                    <img src={presetUrl} alt="preset" className="w-full h-full object-cover" />
-                  </button>
-                ))}
               </div>
             </div>
           </div>

@@ -292,6 +292,22 @@ export const CustomCirclesModal: React.FC<CustomCirclesModalProps> = ({ isOpen, 
               </div>
             </div>
           )}
+          {!activeCircle && (
+            <div className="flex-1 p-8 flex flex-col items-center justify-center text-center space-y-3">
+              <Users className="w-10 h-10 text-slate-300 dark:text-slate-600" />
+              <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">No Circles Created Yet</h4>
+              <p className="text-xs text-slate-400 max-w-xs">
+                Create custom circles like Close Friends, Work, or Family to curate your feed.
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsCreatingNew(true)}
+                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition-colors cursor-pointer"
+              >
+                Create First Circle
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

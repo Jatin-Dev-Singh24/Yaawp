@@ -39,7 +39,7 @@ export const SUPPORT_BOT_USER = {
   id: 'user_yaawp_support_bot',
   username: 'yaawp_support',
   name: 'yaawp_support bot',
-  avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=400&h=400&q=80',
+  avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=yaawp_support',
   isVerified: true
 };
 

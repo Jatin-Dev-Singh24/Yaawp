@@ -24,6 +24,14 @@ export function registerPwaServiceWorker() {
     } catch (e) {
       console.warn('[PWA] Error initializing registerSW:', e);
     }
+  } else if (!import.meta.env.PROD && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+    try {
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (const registration of registrations) {
+          registration.unregister();
+        }
+      });
+    } catch {}
   }
   return () => {};
 }

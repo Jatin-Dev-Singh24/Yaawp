@@ -52,7 +52,7 @@ export const CURRENT_USER: UserProfile = {
   id: 'user_current',
   username: 'creator',
   name: 'New Creator',
-  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&h=400&q=80',
+  avatar: 'https://api.dicebear.com/7.x/identicon/svg?seed=creator',
   isVerified: false,
   bio: 'Visual creator on YAAWP.',
   website: '',
@@ -81,53 +81,7 @@ export const INITIAL_POSTS: Post[] = [];
 
 export const INITIAL_REELS: Reel[] = [];
 
-export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: 'notif_init_1',
-    type: 'like',
-    user: {
-      id: 'user_elena',
-      username: 'elena_visuals',
-      name: 'Elena Rostova',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&h=150&q=80',
-      isVerified: true
-    },
-    text: 'liked your photo.',
-    timestamp: '15m ago',
-    createdAt: Date.now() - 15 * 60 * 1000,
-    isRead: false
-  },
-  {
-    id: 'notif_init_2',
-    type: 'follow',
-    user: {
-      id: 'user_liam',
-      username: 'liam_lens',
-      name: 'Liam Chen',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&h=150&q=80',
-      isVerified: false
-    },
-    text: 'started following you.',
-    timestamp: '2h ago',
-    createdAt: Date.now() - 2 * 60 * 60 * 1000,
-    isRead: false
-  },
-  {
-    id: 'notif_init_3',
-    type: 'comment',
-    user: {
-      id: 'user_maya',
-      username: 'maya_sky',
-      name: 'Maya Patel',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&h=150&q=80',
-      isVerified: true
-    },
-    text: 'commented: "Stunning aesthetic! The light is incredible ✨"',
-    timestamp: '1d ago',
-    createdAt: Date.now() - 24 * 60 * 60 * 1000,
-    isRead: true
-  }
-];
+export const INITIAL_NOTIFICATIONS: NotificationItem[] = [];
 
 export const INITIAL_CONVERSATIONS: ChatConversation[] = [];
 

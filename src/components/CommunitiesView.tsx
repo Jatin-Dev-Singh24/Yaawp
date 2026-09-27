@@ -301,20 +301,32 @@ export const CommunitiesView: React.FC = () => {
         <div className="text-center py-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 space-y-3">
           <Compass className="w-10 h-10 text-slate-400 mx-auto" />
           <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-            No communities match your search
+            {communities.length === 0 ? 'No communities yet' : 'No communities match your search'}
           </p>
           <p className="text-xs text-slate-500">
-            Try a different keyword or create your own custom collective!
+            {communities.length === 0
+              ? 'Be the first to create a creative collective or niche enclave!'
+              : 'Try a different keyword or create your own custom collective!'}
           </p>
-          <button
-            onClick={() => {
-              setSearchQuery('');
-              setActiveFilter('all');
-            }}
-            className="px-4 py-2 rounded-xl bg-lime-500 text-zinc-950 text-xs font-bold hover:bg-lime-400 transition-colors"
-          >
-            Reset Filters
-          </button>
+          {communities.length === 0 ? (
+            <button
+              onClick={() => setIsCreateCommunityOpen(true)}
+              className="px-4 py-2 rounded-xl bg-lime-500 text-zinc-950 text-xs font-bold hover:bg-lime-400 transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create Collective</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setActiveFilter('all');
+              }}
+              className="px-4 py-2 rounded-xl bg-lime-500 text-zinc-950 text-xs font-bold hover:bg-lime-400 transition-colors cursor-pointer"
+            >
+              Reset Filters
+            </button>
+          )}
         </div>
       )}
 

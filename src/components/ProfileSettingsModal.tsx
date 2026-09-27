@@ -109,7 +109,7 @@ export const ProfileSettingsModal: React.FC = () => {
     return {
       id: 'pfp_custom_1',
       label: 'Profile Picture 1',
-      url: currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&h=300&fit=crop',
+      url: currentUser.avatar || '',
       hasNoPfp: false,
       audience: 'everyone',
       customUserIds: [],
@@ -122,7 +122,7 @@ export const ProfileSettingsModal: React.FC = () => {
     return {
       id: 'pfp_custom_2',
       label: 'Profile Picture 2',
-      url: currentUser.secondaryAvatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop',
+      url: currentUser.secondaryAvatar || '',
       hasNoPfp: false,
       audience: 'close_friends',
       customUserIds: [],
@@ -1119,12 +1119,18 @@ export const ProfileSettingsModal: React.FC = () => {
                         <span className="text-[9px] font-bold mt-0.5">No PFP</span>
                       </div>
                     ) : (
-                      <div className="w-20 h-20 rounded-full overflow-hidden ring-2 ring-lime-500 dark:ring-lime-400 bg-slate-200 dark:bg-zinc-800">
-                        <img
-                          src={currentActiveConfig.url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&h=300&fit=crop'}
-                          alt={currentActiveConfig.label}
-                          className="w-full h-full object-cover"
-                        />
+                      <div className="w-20 h-20 rounded-full overflow-hidden ring-2 ring-lime-500 dark:ring-lime-400 bg-slate-200 dark:bg-zinc-800 flex items-center justify-center">
+                        {currentActiveConfig.url ? (
+                          <img
+                            src={currentActiveConfig.url}
+                            alt={currentActiveConfig.label}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-xl font-bold text-slate-500">
+                            {currentUser.username ? currentUser.username[0].toUpperCase() : 'U'}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1199,30 +1205,6 @@ export const ProfileSettingsModal: React.FC = () => {
                       placeholder="Or enter direct image URL..."
                       className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
                     />
-
-                    {/* Quick Avatar Presets */}
-                    <div className="flex items-center gap-2 pt-1 overflow-x-auto pb-1">
-                      <span className="text-[10px] text-slate-500 dark:text-zinc-400 shrink-0 font-medium">
-                        Quick presets:
-                      </span>
-                      {[
-                        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&h=300&fit=crop',
-                        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop',
-                        'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300&h=300&fit=crop',
-                        'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&h=300&fit=crop',
-                        'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=300&h=300&fit=crop'
-                      ].map((presetUrl, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => setCurrentActiveConfig(prev => ({ ...prev, url: presetUrl }))}
-                          className="w-7 h-7 rounded-full overflow-hidden border border-slate-300 dark:border-zinc-700 hover:scale-110 transition-transform shrink-0"
-                          title="Use preset image"
-                        >
-                          <img src={presetUrl} alt="Preset" className="w-full h-full object-cover" />
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 )}
 

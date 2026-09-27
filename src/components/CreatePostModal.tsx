@@ -38,7 +38,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { ReelsEditor } from './ReelsEditor';
 import { PostDraft, StoryPoll } from '../types';
-import { FILTER_PRESETS, PRESET_CREATION_PHOTOS } from '../data/mockData';
+import { FILTER_PRESETS } from '../data/mockData';
 import { uploadMediaToSupabase } from '../lib/supabaseStorage';
 import { DEFAULT_QUICK_REACTIONS, ALL_PRESET_EMOJIS, EMOJI_CATEGORIES } from '../data/emojis';
 import {
@@ -356,31 +356,6 @@ export const CreatePostModal: React.FC = () => {
     const file = e.dataTransfer.files?.[0];
     if (file) {
       processSelectedMediaFile(file);
-    }
-  };
-
-  const handleSelectPreset = async (url: string, loc: string) => {
-    setIsConvertingMedia(true);
-    setIsVideo(false);
-    setVideoPreviewUrl('');
-    setLocation(loc);
-    try {
-      const webpResult = await convertImageToWebP(url);
-      setRawUncroppedFile(webpResult.file);
-      setRawUncroppedImage(webpResult.dataUrl);
-      setSelectedFile(webpResult.file);
-      setSelectedImage(webpResult.dataUrl);
-      setWebpBadge('⚡ High Quality Photo');
-      setStep('crop');
-    } catch {
-      setRawUncroppedFile(null);
-      setRawUncroppedImage(url);
-      setSelectedFile(null);
-      setSelectedImage(url);
-      setWebpBadge('⚡ High Quality Photo');
-      setStep('crop');
-    } finally {
-      setIsConvertingMedia(false);
     }
   };
 
@@ -832,42 +807,6 @@ export const CreatePostModal: React.FC = () => {
                       className="hidden"
                     />
                   </div>
-
-                  {/* Preset Gallery - only if presets exist */}
-                  {PRESET_CREATION_PHOTOS.length > 0 && (
-                    <div className="w-full mt-7">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                            Or select from aesthetic presets
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                        {PRESET_CREATION_PHOTOS.map((preset, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => handleSelectPreset(preset.url, preset.location)}
-                            className="group relative aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-indigo-500"
-                          >
-                            <img
-                              src={preset.url}
-                              alt={preset.title}
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                            />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-end p-1.5 transition-opacity">
-                              <span className="text-[10px] font-medium text-white truncate">
-                                {preset.title}
-                              </span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
 

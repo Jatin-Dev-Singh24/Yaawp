@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DocumentData } from '../../types';
-import { FileText, Upload, X, Check, FileCode, FileArchive, FileSpreadsheet } from 'lucide-react';
+import { FileText, Upload, X, FileCode, FileArchive, FileSpreadsheet, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface DocumentAttachmentModalProps {
@@ -8,29 +8,6 @@ interface DocumentAttachmentModalProps {
   onClose: () => void;
   onSendDocument: (doc: DocumentData, caption?: string) => void;
 }
-
-const PRESET_DOCUMENTS: DocumentData[] = [
-  {
-    fileName: 'Design_System_Spec_v3.pdf',
-    fileSize: '3.4 MB',
-    fileType: 'PDF Document',
-  },
-  {
-    fileName: 'Project_Contract_NDA.docx',
-    fileSize: '1.2 MB',
-    fileType: 'Word Document',
-  },
-  {
-    fileName: 'Q3_Campaign_Analytics.xlsx',
-    fileSize: '890 KB',
-    fileType: 'Spreadsheet',
-  },
-  {
-    fileName: 'Asset_Package_Icons.zip',
-    fileSize: '6.7 MB',
-    fileType: 'ZIP Archive',
-  },
-];
 
 export const DocumentAttachmentModal: React.FC<DocumentAttachmentModalProps> = ({
   isOpen,
@@ -113,53 +90,42 @@ export const DocumentAttachmentModal: React.FC<DocumentAttachmentModalProps> = (
         {/* Content */}
         <div className="p-4 space-y-4">
           {/* File Upload Trigger */}
-          <label className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer bg-slate-50/50 dark:bg-slate-800/30 hover:bg-blue-50/20 transition-all">
-            <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <Upload className="w-5 h-5" />
+          {selectedDoc ? (
+            <div className="p-4 rounded-2xl border border-blue-500 bg-blue-50/50 dark:bg-blue-950/30 flex items-center justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center shrink-0">
+                  {getDocIcon(selectedDoc.fileName)}
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                    {selectedDoc.fileName}
+                  </span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                    {selectedDoc.fileSize} • {selectedDoc.fileType}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDoc(null)}
+                className="text-rose-500 hover:text-rose-600 p-1.5 rounded-lg"
+                title="Remove document"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-              {selectedDoc ? selectedDoc.fileName : 'Choose file from your device'}
-            </span>
-            <span className="text-[10px] text-slate-400">PDF, DOCX, ZIP up to 50MB</span>
-            <input type="file" className="hidden" onChange={handleFileUpload} />
-          </label>
-
-          {/* Quick Presets */}
-          <div>
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-              Or pick preset document:
-            </span>
-            <div className="space-y-1.5">
-              {PRESET_DOCUMENTS.map((doc, idx) => {
-                const isSelected = selectedDoc?.fileName === doc.fileName;
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setSelectedDoc(doc)}
-                    className={`w-full p-2.5 rounded-xl border flex items-center justify-between text-left transition-all ${
-                      isSelected
-                        ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 shadow-xs'
-                        : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {getDocIcon(doc.fileName)}
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
-                          {doc.fileName}
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          {doc.fileSize} • {doc.fileType}
-                        </span>
-                      </div>
-                    </div>
-                    {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0 ml-2" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          ) : (
+            <label className="w-full py-8 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer bg-slate-50/50 dark:bg-slate-800/30 hover:bg-blue-50/20 transition-all">
+              <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                <Upload className="w-5 h-5" />
+              </div>
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Choose file from your device
+              </span>
+              <span className="text-[10px] text-slate-400">PDF, DOCX, XLSX, ZIP up to 50MB</span>
+              <input type="file" className="hidden" onChange={handleFileUpload} />
+            </label>
+          )}
 
           {/* Optional Caption */}
           {selectedDoc && (
@@ -183,7 +149,7 @@ export const DocumentAttachmentModal: React.FC<DocumentAttachmentModalProps> = (
           <button
             type="button"
             onClick={onClose}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800"
+            className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 cursor-pointer"
           >
             Cancel
           </button>
@@ -191,7 +157,7 @@ export const DocumentAttachmentModal: React.FC<DocumentAttachmentModalProps> = (
             type="button"
             onClick={handleSend}
             disabled={!selectedDoc}
-            className="px-4 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-xs transition-colors"
+            className="px-4 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-xs transition-colors cursor-pointer"
           >
             Send Document
           </button>

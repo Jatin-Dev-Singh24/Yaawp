@@ -633,6 +633,17 @@ export const ReelsView: React.FC = () => {
                       openUserProfile(userId);
                     }}
                     currentUserId={currentUser.id}
+                    currentUsername={currentUser.username}
+                    isPostAuthor={
+                      currentReel.user.id === currentUser.id ||
+                      Boolean(
+                        currentReel.user.username &&
+                        currentUser.username &&
+                        currentReel.user.username.toLowerCase() === currentUser.username.toLowerCase()
+                      ) ||
+                      currentReel.user.id === 'user_current' ||
+                      currentUser.id === 'user_current'
+                    }
                   />
                 ) : (
                   <div className="py-12 text-center text-xs text-slate-400">

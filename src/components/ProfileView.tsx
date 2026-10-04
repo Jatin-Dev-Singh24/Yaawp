@@ -120,19 +120,42 @@ export const ProfileView: React.FC = () => {
     return () => clearTimeout(timer);
   }, [viewedUserId]);
 
+  // Robust user matching: matches by ID, username, or default creator
+  const isProfileOwner = (userId: string, username?: string) => {
+    if (userId && userId === activeProfile.id) return true;
+    if (
+      activeProfile.username &&
+      username &&
+      activeProfile.username.toLowerCase() === username.toLowerCase()
+    ) {
+      return true;
+    }
+    const isViewingSelf =
+      activeProfile.id === currentUser.id ||
+      Boolean(
+        activeProfile.username &&
+        currentUser.username &&
+        activeProfile.username.toLowerCase() === currentUser.username.toLowerCase()
+      );
+    if (isViewingSelf && (userId === 'user_current' || currentUser.id === 'user_current')) {
+      return true;
+    }
+    return false;
+  };
+
   // Filter posts
-  const userPosts = posts.filter(p => p.user.id === activeProfile.id);
-  const userReels = reels.filter(r => r.user.id === activeProfile.id);
+  const userPosts = posts.filter(p => isProfileOwner(p.user.id, p.user.username));
+  const userReels = reels.filter(r => isProfileOwner(r.user.id, r.user.username));
   // Reposted posts: ONLY posts where activeProfile explicitly clicked Repost (or repost entries created by them)
   const repostPosts = posts.filter(
     p =>
-      p.repostedBy?.id === activeProfile.id ||
-      (p.id.startsWith('repost_') && p.user.id === activeProfile.id)
+      isProfileOwner(p.repostedBy?.id || '', p.repostedBy?.username) ||
+      (p.id.startsWith('repost_') && isProfileOwner(p.user.id, p.user.username))
   );
   // Tagged posts: ONLY posts by OTHER creators where activeProfile is genuinely tagged
   const taggedPosts = posts.filter(
     p =>
-      p.user.id !== activeProfile.id &&
+      !isProfileOwner(p.user.id, p.user.username) &&
       (p.taggedUserIds?.includes(activeProfile.id) ||
         (Boolean(activeProfile.username && activeProfile.username.length > 1) &&
           p.caption &&

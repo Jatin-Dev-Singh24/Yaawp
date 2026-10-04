@@ -18,6 +18,8 @@ interface ThreadedCommentTreeProps {
   onOpenUserProfile?: (userId: string) => void;
   onDeleteComment?: (commentId: string) => void;
   currentUserId?: string;
+  currentUsername?: string;
+  isPostAuthor?: boolean;
   maxIndentLevel?: number;
 }
 
@@ -29,6 +31,8 @@ export const ThreadedCommentTree: React.FC<ThreadedCommentTreeProps> = ({
   onOpenUserProfile,
   onDeleteComment,
   currentUserId,
+  currentUsername,
+  isPostAuthor,
   maxIndentLevel = 5
 }) => {
   const replyHandler = onAddReply || onReply || (() => {});
@@ -45,6 +49,8 @@ export const ThreadedCommentTree: React.FC<ThreadedCommentTreeProps> = ({
           onOpenUserProfile={onOpenUserProfile}
           onDeleteComment={onDeleteComment}
           currentUserId={currentUserId}
+          currentUsername={currentUsername}
+          isPostAuthor={isPostAuthor}
           maxIndentLevel={maxIndentLevel}
         />
       ))}
@@ -60,6 +66,8 @@ interface CommentNodeProps {
   onOpenUserProfile?: (userId: string) => void;
   onDeleteComment?: (commentId: string) => void;
   currentUserId?: string;
+  currentUsername?: string;
+  isPostAuthor?: boolean;
   maxIndentLevel: number;
 }
 
@@ -71,6 +79,8 @@ const CommentNode: React.FC<CommentNodeProps> = ({
   onOpenUserProfile,
   onDeleteComment,
   currentUserId,
+  currentUsername,
+  isPostAuthor,
   maxIndentLevel
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -177,18 +187,28 @@ const CommentNode: React.FC<CommentNodeProps> = ({
                   <span>Reply</span>
                 </button>
 
-                {/* Delete button (only for comment author) */}
-                {onDeleteComment && currentUserId === comment.user.id && (
-                  <button
-                    type="button"
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="flex items-center gap-1 font-medium text-slate-400 hover:text-rose-500 transition-colors"
-                    title="Delete comment"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    <span>Delete</span>
-                  </button>
-                )}
+                {/* Delete button (for comment author or post owner) */}
+                {(() => {
+                  const isOwnComment = Boolean(
+                    (currentUserId && (comment.user.id === currentUserId || comment.user.id === 'user_current' || currentUserId === 'user_current')) ||
+                    (currentUsername && comment.user.username && comment.user.username.toLowerCase() === currentUsername.toLowerCase())
+                  );
+                  const canDelete = Boolean(onDeleteComment && (isOwnComment || isPostAuthor));
+
+                  if (!canDelete) return null;
+
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="flex items-center gap-1 font-medium text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                      title="Delete comment"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Delete</span>
+                    </button>
+                  );
+                })()}
               </div>
 
               {/* Delete Confirmation Modal */}
@@ -300,6 +320,8 @@ const CommentNode: React.FC<CommentNodeProps> = ({
                       onOpenUserProfile={onOpenUserProfile}
                       onDeleteComment={onDeleteComment}
                       currentUserId={currentUserId}
+                      currentUsername={currentUsername}
+                      isPostAuthor={isPostAuthor}
                       maxIndentLevel={maxIndentLevel}
                     />
                   ))}

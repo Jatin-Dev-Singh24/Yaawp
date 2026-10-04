@@ -245,7 +245,9 @@ export const AuthCard: React.FC<AuthCardProps> = ({
           loginCaptchaRef.current?.resetCaptcha();
           setLoginCaptchaToken(null);
           const matchedProfile = profilesList.find(
-            p => p.username.toLowerCase() === identifier.toLowerCase()
+            p =>
+              p.username.toLowerCase() === identifier.toLowerCase() ||
+              p.email?.toLowerCase() === identifier.toLowerCase()
           );
           if (matchedProfile) {
             switchAccount(matchedProfile.id);

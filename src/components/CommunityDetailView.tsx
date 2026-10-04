@@ -679,6 +679,17 @@ export const CommunityDetailView: React.FC<CommunityDetailViewProps> = ({ commun
                                 }}
                                 onOpenUserProfile={openUserProfile}
                                 currentUserId={currentUser.id}
+                                currentUsername={currentUser.username}
+                                isPostAuthor={
+                                  disc.author.id === currentUser.id ||
+                                  Boolean(
+                                    disc.author.username &&
+                                    currentUser.username &&
+                                    disc.author.username.toLowerCase() === currentUser.username.toLowerCase()
+                                  ) ||
+                                  disc.author.id === 'user_current' ||
+                                  currentUser.id === 'user_current'
+                                }
                                 maxIndentLevel={4}
                               />
                             ) : (

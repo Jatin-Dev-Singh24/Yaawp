@@ -109,7 +109,9 @@ export const PostDetailModal: React.FC = () => {
       post.user.username &&
       currentUser.username &&
       post.user.username.toLowerCase() === currentUser.username.toLowerCase()
-    );
+    ) ||
+    post.user.id === 'user_current' ||
+    currentUser.id === 'user_current';
 
   // Original post attribution extraction if quoted or reposted
   const originalAuthor = post.quotePost
@@ -624,6 +626,8 @@ export const PostDetailModal: React.FC = () => {
                 onOpenUserProfile={(userId) => goToProfile(userId)}
                 onDeleteComment={(commentId) => deleteComment(post.id, commentId)}
                 currentUserId={currentUser.id}
+                currentUsername={currentUser.username}
+                isPostAuthor={isOwnPost}
               />
             ) : (
               <div className="py-8 text-center text-slate-400 dark:text-slate-500">

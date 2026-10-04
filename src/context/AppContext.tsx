@@ -570,7 +570,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const existingProfile = dbProfile || (Object.values(userProfiles) as UserProfile[]).find(
-        p => p.id === user.id || (p.email && p.email.toLowerCase() === email.toLowerCase())
+        p => p.id === user.id ||
+             (p.email && p.email.toLowerCase() === email.toLowerCase()) ||
+             (p.username && userHandle && p.username.toLowerCase() === userHandle.toLowerCase()) ||
+             p.id === 'user_current'
       );
 
       const resolvedHandle = existingProfile?.username || userHandle;
@@ -581,7 +584,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         name: existingProfile?.name || userName,
         username: resolvedHandle,
         avatar: existingProfile?.avatar || userAvatar,
-        bio: existingProfile?.bio || 'Connected via Google Account ✨',
+        bio: existingProfile?.bio || 'Connected ✨',
         website: existingProfile?.website || '',
         followersCount: existingProfile?.followersCount ?? 0,
         followingCount: existingProfile?.followingCount ?? 0,
@@ -597,6 +600,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }));
       setIsAuthenticated(true);
       localStorage.setItem('yaawp_authenticated', 'true');
+      localStorage.setItem(`${LOCAL_STORAGE_KEY}_user`, JSON.stringify(updatedUser));
+
+      // Link previous posts and comments created under local ID or username to the active user ID
+      setPosts(prevPosts =>
+        prevPosts.map(p => {
+          const isMatch =
+            p.user.id === user.id ||
+            p.user.id === 'user_current' ||
+            (p.user.username && resolvedHandle && p.user.username.toLowerCase() === resolvedHandle.toLowerCase());
+          if (isMatch) {
+            return {
+              ...p,
+              user: {
+                ...p.user,
+                id: user.id,
+                username: resolvedHandle,
+                name: updatedUser.name,
+                avatar: updatedUser.avatar,
+                isVerified: updatedUser.isVerified
+              },
+              comments: (p.comments || []).map(c => {
+                const isCommentMatch =
+                  c.user.id === user.id ||
+                  c.user.id === 'user_current' ||
+                  (c.user.username && resolvedHandle && c.user.username.toLowerCase() === resolvedHandle.toLowerCase());
+                if (isCommentMatch) {
+                  return {
+                    ...c,
+                    user: {
+                      ...c.user,
+                      id: user.id,
+                      username: resolvedHandle,
+                      name: updatedUser.name,
+                      avatar: updatedUser.avatar
+                    }
+                  };
+                }
+                return c;
+              })
+            };
+          }
+          return p;
+        })
+      );
 
       // Check if user still needs to pick a personalized unique handle
       const customUsernamePicked = localStorage.getItem(`yaawp_custom_username_${user.id}`);
@@ -653,10 +700,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (data && isMounted && data.length > 0) {
           const mappedPosts: Post[] = data.map((row: any) => {
-            const isText =
-              row.media_type === 'text' ||
-              !row.media_url ||
-              row.media_url.includes('photo-1516035069371-29a1b244cc32');
+            const hasMedia = Boolean(
+              row.media_url &&
+              row.media_url.trim().length > 0 &&
+              !row.media_url.includes('photo-1516035069371-29a1b244cc32')
+            );
+            const isText = row.media_type === 'text' || !hasMedia;
 
             return {
               id: row.id,
@@ -667,7 +716,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 avatar: currentUser.avatar,
                 isVerified: currentUser.isVerified
               },
-              mediaUrls: isText ? [] : (row.media_url ? [row.media_url] : []),
+              mediaUrls: hasMedia ? [row.media_url] : [],
               isTextPost: isText,
               postType: isText ? 'text' : (row.media_type === 'video' ? 'video' : 'image'),
               caption: row.caption || '',
@@ -695,11 +744,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const existing = prevMap.get(sp.id);
               const inter = interactions[sp.id];
               if (existing) {
+                const effectiveMedia = (existing.mediaUrls && existing.mediaUrls.length > 0)
+                  ? existing.mediaUrls
+                  : sp.mediaUrls;
+                const effectiveIsText = sp.postType === 'text' || (effectiveMedia.length === 0 && Boolean(existing.isTextPost));
+
                 return {
                   ...sp,
-                  isTextPost: existing.isTextPost ?? sp.isTextPost,
+                  isTextPost: effectiveIsText,
                   textPostTheme: existing.textPostTheme,
-                  mediaUrls: existing.isTextPost ? [] : (existing.mediaUrls?.length ? existing.mediaUrls : sp.mediaUrls),
+                  mediaUrls: effectiveMedia,
                   likesCount: Math.max(existing.likesCount || 0, inter?.likesCount || 0, sp.likesCount || 0),
                   isLiked: existing.isLiked || inter?.isLiked || sp.isLiked,
                   isSaved: existing.isSaved || inter?.isSaved || sp.isSaved,
@@ -1779,17 +1833,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Graceful quota recovery: prune old redundant keys and store essential compact posts
       try {
         localStorage.removeItem(FEED_OFFLINE_CACHE_KEY);
-        const compactPosts = posts.slice(0, 30);
+        localStorage.removeItem('lumina_feed_offline_cache_v2');
+        localStorage.removeItem('instagram_app_state_v1_posts');
+        localStorage.removeItem('instagram_app_state_v1_stories');
+        localStorage.removeItem('instagram_app_state_v1_reels');
+        const compactPosts = posts.slice(0, 25);
         localStorage.setItem(`${LOCAL_STORAGE_KEY}_posts`, JSON.stringify(compactPosts));
       } catch {
         try {
-          const ultraCompact = posts.slice(0, 20).map((p, idx) => {
-            if (idx > 3 && p.mediaUrls && p.mediaUrls.some(u => u && u.length > 50000)) {
-              return { ...p, mediaUrls: [] };
-            }
-            return p;
-          });
-          localStorage.setItem(`${LOCAL_STORAGE_KEY}_posts`, JSON.stringify(ultraCompact));
+          const minimalPosts = posts.slice(0, 15);
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_posts`, JSON.stringify(minimalPosts));
         } catch {}
       }
     }
@@ -1884,11 +1937,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       filtered = filtered.filter(p => !hiddenUsersWithPostsHidden.has(p.user.id));
     }
 
+    // Helper to identify posts belonging to the active user across sessions / renames
+    const isCurrentUserPost = (p: Post) => {
+      if (p.user.id === currentUser.id) return true;
+      if (
+        currentUser.username &&
+        p.user.username &&
+        currentUser.username.toLowerCase() === p.user.username.toLowerCase()
+      ) {
+        return true;
+      }
+      if (p.user.id === 'user_current' || currentUser.id === 'user_current') {
+        return true;
+      }
+      return false;
+    };
+
     // 1. Filter by feedMode
     if (feedMode === 'following') {
       // Strictly creator subscriptions: followed users + current user
       filtered = filtered.filter(
-        p => followedUserIds.includes(p.user.id) || p.user.id === currentUser.id
+        p => followedUserIds.includes(p.user.id) || isCurrentUserPost(p)
       );
     } else if (feedMode === 'for_you') {
       // Algorithmic discovery with user control
@@ -1913,7 +1982,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         // Stop seeing recommended strangers?
         if (algorithmSettings.stopStrangers) {
-          const isFollowed = followedUserIds.includes(p.user.id) || p.user.id === currentUser.id;
+          const isFollowed = followedUserIds.includes(p.user.id) || isCurrentUserPost(p);
           if (!isFollowed) return false;
         }
 
@@ -1935,13 +2004,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           )
       );
     } else if (feedMode === 'my_posts') {
-      filtered = filtered.filter(p => p.user.id === currentUser.id);
+      filtered = filtered.filter(p => isCurrentUserPost(p));
     } else if (feedMode === 'custom_list') {
       if (activeCustomCircleId) {
         const circle = customCircles.find(c => c.id === activeCustomCircleId);
         if (circle) {
           filtered = filtered.filter(
-            p => circle.userIds.includes(p.user.id) || p.user.id === currentUser.id
+            p => circle.userIds.includes(p.user.id) || isCurrentUserPost(p)
           );
         }
       }
@@ -3530,6 +3599,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_user`, JSON.stringify(fullProfile));
     localStorage.setItem('yaawp_authenticated', 'true');
     setIsAuthenticated(true);
+
+    // Link user posts & comments to the switched account
+    setPosts(prevPosts =>
+      prevPosts.map(p => {
+        const isMatch =
+          p.user.id === fullProfile.id ||
+          p.user.id === 'user_current' ||
+          (p.user.username && fullProfile.username && p.user.username.toLowerCase() === fullProfile.username.toLowerCase());
+        if (isMatch) {
+          return {
+            ...p,
+            user: {
+              ...p.user,
+              id: fullProfile.id,
+              username: fullProfile.username,
+              name: fullProfile.name,
+              avatar: fullProfile.avatar,
+              isVerified: fullProfile.isVerified
+            },
+            comments: (p.comments || []).map(c => {
+              const isCommentMatch =
+                c.user.id === fullProfile.id ||
+                c.user.id === 'user_current' ||
+                (c.user.username && fullProfile.username && c.user.username.toLowerCase() === fullProfile.username.toLowerCase());
+              if (isCommentMatch) {
+                return {
+                  ...c,
+                  user: {
+                    ...c.user,
+                    id: fullProfile.id,
+                    username: fullProfile.username,
+                    name: fullProfile.name,
+                    avatar: fullProfile.avatar
+                  }
+                };
+              }
+              return c;
+            })
+          };
+        }
+        return p;
+      })
+    );
+
     showToast(`Switched account to @${fullProfile.username}`);
   };
 
@@ -5297,22 +5410,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsAuthenticated(true);
         localStorage.setItem('yaawp_authenticated', 'true');
         if (data.user) {
+          const user = data.user;
+          const meta = user.user_metadata || {};
+          const fallbackHandle = user.email ? sanitizeUsername(user.email.split('@')[0]) : 'user';
+          const userHandle = sanitizeUsername(meta.username || '') || fallbackHandle;
+          const userName = meta.full_name || meta.name || userHandle;
+          const userAvatar = meta.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(user.id)}`;
+
+          const existingProfile = (Object.values(userProfiles) as UserProfile[]).find(
+            p => p.id === user.id ||
+                 (p.email && p.email.toLowerCase() === user.email?.toLowerCase()) ||
+                 (p.username && p.username.toLowerCase() === userHandle.toLowerCase()) ||
+                 p.id === 'user_current'
+          );
+
+          const resolvedHandle = existingProfile?.username || userHandle;
           const profile: UserProfile = {
-            id: data.user.id,
-            email: data.user.email,
-            username: data.user.user_metadata?.username || (data.user.email ? data.user.email.split('@')[0] : 'user'),
-            name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || 'User',
-            avatar: data.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(data.user.id)}`,
-            bio: 'Yaawp creator ✨',
-            isVerified: false,
-            followersCount: 0,
-            followingCount: 0,
-            postsCount: 0,
-            highlights: []
+            ...(existingProfile || {}),
+            id: user.id,
+            email: user.email,
+            username: resolvedHandle,
+            name: existingProfile?.name || userName,
+            avatar: existingProfile?.avatar || userAvatar,
+            bio: existingProfile?.bio || 'Yaawp creator ✨',
+            website: existingProfile?.website || '',
+            isVerified: existingProfile?.isVerified ?? false,
+            followersCount: existingProfile?.followersCount ?? 0,
+            followingCount: existingProfile?.followingCount ?? 0,
+            postsCount: existingProfile?.postsCount ?? 0,
+            highlights: existingProfile?.highlights || []
           };
           setCurrentUser(profile);
           setViewedUserId(profile.id);
+          setUserProfiles(prev => ({
+            ...prev,
+            [user.id]: profile
+          }));
           localStorage.setItem(`${LOCAL_STORAGE_KEY}_user`, JSON.stringify(profile));
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_profiles`, JSON.stringify({ ...userProfiles, [user.id]: profile }));
+
+          // Link past posts & comments to the authenticated user ID
+          setPosts(prevPosts =>
+            prevPosts.map(p => {
+              const isMatch =
+                p.user.id === user.id ||
+                p.user.id === 'user_current' ||
+                (p.user.username && resolvedHandle && p.user.username.toLowerCase() === resolvedHandle.toLowerCase());
+              if (isMatch) {
+                return {
+                  ...p,
+                  user: {
+                    ...p.user,
+                    id: user.id,
+                    username: resolvedHandle,
+                    name: profile.name,
+                    avatar: profile.avatar,
+                    isVerified: profile.isVerified
+                  },
+                  comments: (p.comments || []).map(c => {
+                    const isCommentMatch =
+                      c.user.id === user.id ||
+                      c.user.id === 'user_current' ||
+                      (c.user.username && resolvedHandle && c.user.username.toLowerCase() === resolvedHandle.toLowerCase());
+                    if (isCommentMatch) {
+                      return {
+                        ...c,
+                        user: {
+                          ...c.user,
+                          id: user.id,
+                          username: resolvedHandle,
+                          name: profile.name,
+                          avatar: profile.avatar
+                        }
+                      };
+                    }
+                    return c;
+                  })
+                };
+              }
+              return p;
+            })
+          );
         }
         showToast('Logged in with Supabase successfully!');
         return { success: true };

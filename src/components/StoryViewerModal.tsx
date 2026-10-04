@@ -474,6 +474,17 @@ export const StoryViewerModal: React.FC = () => {
                       openUserProfile(userId);
                     }}
                     currentUserId={currentUser.id}
+                    currentUsername={currentUser.username}
+                    isPostAuthor={
+                      currentStory.user.id === currentUser.id ||
+                      Boolean(
+                        currentStory.user.username &&
+                        currentUser.username &&
+                        currentStory.user.username.toLowerCase() === currentUser.username.toLowerCase()
+                      ) ||
+                      currentStory.user.id === 'user_current' ||
+                      currentUser.id === 'user_current'
+                    }
                   />
                 ) : (
                   <div className="text-center py-8 text-xs text-slate-400">
